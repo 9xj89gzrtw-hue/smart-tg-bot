@@ -3,14 +3,88 @@
 > Этот файл — накопленный опыт из всех задач. Перед каждой новой задачей ОБЯЗАТЕЛЬНО прочитать и применить.
 > После каждой задачи ОБЯЗАТЕЛЬНО обновлять.
 
-**Версия**: 1.0
+**Версия**: 1.1
 **Последнее обновление**: 2026-07-02
-**Задач выполнено**: 47+ (за сессию)
-**Ключевых уроков**: 23
+**Задач выполнено**: 50+ (за сессию)
+**Ключевых уроков**: 30
+**Правил извлечено**: R1-R20
+**Анти-паттернов**: A1-A12 + PROCESS-1..4
 
 ---
 
-## §1. POSTMORTEM ПОСЛЕДНЕЙ ЗАДАЧИ (HF Space deploy)
+## §1. POSTMORTEM СЕССИИ 2026-07-01 → 2026-07-02
+
+### Что было сделано (итог сессии)
+- Создан мета-промпт v9.99-FINAL (95KB, 1090 строк, §0-§XX)
+- Создан Telegram-бот v3 с multi-provider cascade + AutoSwarm
+- Задеплоено 2 хостинга: Render + HF Space (финальный = HF)
+- Создана memory система: SELF_IMPROVEMENT, META_PROMPT_QUICK_REF, CONVERSATION_LOG, TECHNICAL_DISCOVERIES, FAILED_ATTEMPTS
+- Создана автоматизация: pre_commit, health_monitor, auto_deploy
+- Backup в 3 места: GitHub + HF + Telegram channel
+
+### Что получилось хорошо ✓
+- Multi-provider cascade — бот работает даже когда z-ai 429
+- Token rotation — 15 req/min с 1 токеном, можно масштабировать
+- HF Space deploy — 24/7, 16GB RAM, free
+- Live data fetchers — 80% вопросов без AI
+- AutoSwarm — автоматически выбирает число агентов
+- Pre-commit hook — ловит syntax errors и secrets
+- Self-improvement loop — после каждой задачи обновляю память
+
+### Что получилось плохо ✗
+- 4 итерации Dockerfile для HF (npm install, EADDRINUSE, IPv6, frontmatter)
+- z-ai SDK не работает на HF (chat-scoped JWT)
+- Bot иногда "становился тупее" от direct-ответов (исправлено — live data = контекст)
+- Не сразу добавил IPv4-first DNS
+- 1 GH токен отозван через Secret Scanning (хардкод в public repo)
+- Не валидировал JS syntax перед push (export undefined)
+
+### Ошибки (НЕ повторять)
+1. Хардкодить токены в коде (A1)
+2. IPv6 для Telegram (A2)
+3. npm install -g в HF Dockerfile (A3)
+4. Дублирование server.listen (A4)
+5. README без frontmatter на HF (A5)
+6. z-ai SDK вне песочницы (A6)
+7. Не валидировать JS syntax (A7)
+8. Direct-ответы вместо AI с контекстом (A11)
+9. Trust training data для "current" facts (A12)
+10. Не читать SELF_IMPROVEMENT перед задачей (PROCESS-1)
+
+### Что можно было сделать быстрее
+- Сразу минимальный Dockerfile (без Ollama, без npm install)
+- Сразу IPv4-first DNS (известная проблема)
+- Сразу pre-commit hook с syntax check
+- Сразу патченный smart_bot_v3 для HF (без z-ai SDK)
+- Сначала читать FAILED_ATTEMPTS перед попыткой нового подхода
+
+### Что можно автоматизировать (ещё TODO)
+- GitHub Action для auto-deploy on push в main
+- Vector DB (RAG по MEMORY для контекстных ответов)
+- Self-benchmarking каждые 24h
+- Pattern library (npm package с переиспользуемыми функциями)
+
+### Новые знания (сохранить)
+- HF Spaces API: create/commit/secrets/restart/status — всё через REST
+- GitHub Models: free GPT-4o/Llama 405B для GitHub пользователей
+- Streaming Pollinations обходит queue limit
+- Telegram IPv6 timeout — всегда ipv4first
+- Multi-token rotation: N токенов = N×15 req/min
+- Live data first, AI second (smart router pattern)
+- AutoSwarm: complexity detection → 1-7 agents
+- Pre-commit enforcement (правила = код)
+
+### Закономерности
+- HF Spaces = лучший free 24/7 хостинг
+- GitHub Models = лучший free AI (если есть токен)
+- Pollinations = надёжный fallback (но rate-limited)
+- z-ai = умный но sandbox-only
+- Memory files = критичны для continuous improvement
+- Pre-commit hook = спасает 50% runtime errors
+
+---
+
+## §1.1 POSTMORTEM ПОСЛЕДНЕЙ ЗАДАЧИ (HF Space deploy)
 
 ### Задача
 Деплой Telegram-бота на HuggingFace Space через API, полностью автономно.
@@ -184,6 +258,35 @@ done
 Полный мета-промпт = 1090 строк, 95KB. Читать каждый раз = дорого.
 Решение: `META_PROMPT_QUICK_REF.md` — выжимка всех правил (NL-1..NL-9, §III, §IV, §VI, §IX domain disclaimers, §XI Truth Gateway, §XII Idea Validator, §XV SOTA, §XVIII Safety, §XIX Auto-improvement, §XX Proactive Engine).
 Перед задачей: читать SELF_IMPROVEMENT.md + META_PROMPT_QUICK_REF.md (вместо 95KB полного мета-промпта).
+
+### R17: CONVERSATION_LOG.md — выжимка сессии
+После каждой большой сессии — обновлять CONVERSATION_LOG.md с: что сделано, ключевые решения пользователя, финальный статус, темы обсуждения, чего не хватало.
+Это даёт контекст будущим чатам (особенно если песочница перезапустится и нужно восстановить состояние).
+
+### R18: TECHNICAL_DISCOVERIES.md — centralized API/techniques
+Все технические находки (API endpoints, models, techniques, error patterns) в одном файле.
+Перед интеграцией нового API — проверить TECHNICAL_DISCOVERIES.md (может уже есть рабочий пример).
+Перед попыткой нового подхода — проверить FAILED_ATTEMPTS.md (может уже провалилось).
+
+### R19: FAILED_ATTEMPTS.md — что не сработало
+Каждый провал = данные. Записывать что пробовали, результат, причину, fix/альтернативу.
+Перед попыткой нового подхода — читать FAILED_ATTEMPTS.md чтобы не повторить.
+
+### R20: Memory files структура (read before task)
+Перед каждой задачей читать:
+1. `SELF_IMPROVEMENT.md` — опыт + правила R1-R20 + анти-паттерны A1-A12
+2. `META_PROMPT_QUICK_REF.md` — правила мета-промпта (NL-1..NL-9, §III-§XX)
+3. `MEMORY.md` — проектная память (факты, токены, конфиги)
+4. `FAILED_ATTEMPTS.md` — что не сработало (если применимо к задаче)
+5. `TECHNICAL_DISCOVERIES.md` — если нужна техническая интеграция
+6. `CONVERSATION_LOG.md` — если нужен контекст прошлой сессии
+
+После каждой задачи обновлять:
+- `SELF_IMPROVEMENT.md` — postmortem + новые правила
+- `CONVERSATION_LOG.md` — если значимый этап
+- `MEMORY.md` — если новые факты
+- `FAILED_ATTEMPTS.md` — если что-то провалилось
+- `TECHNICAL_DISCOVERIES.md` — если новые API/techniques
 
 ---
 
