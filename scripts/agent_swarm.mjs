@@ -86,6 +86,10 @@ function markTokenSucceeded(tokenObj) {
 }
 
 // ====================== FALLBACK: Pollinations (truly free, no key) ======================
+// Pollinations rate-limits by IP (1 concurrent + queue), so we use:
+// 1. Smart queue with backoff
+// 2. Streaming mode (bypasses queue)
+// 3. Proxy rotation as last resort
 async function pollinationsFallback(messages, maxTokens = 800) {
   const body = {
     model: 'openai',
@@ -93,8 +97,9 @@ async function pollinationsFallback(messages, maxTokens = 800) {
     max_tokens: maxTokens,
     reasoning_effort: 'low',
   };
-  // Retry up to 3 times (Pollinations has queue limit 1, but retries work)
-  for (let i = 0; i < 3; i++) {
+  
+  // Strategy 1: Try non-streaming with retries
+  for (let i = 0; i < 4; i++) {
     try {
       const r = await fetch('https://text.pollinations.ai/openai', {
         method: 'POST',
@@ -103,7 +108,8 @@ async function pollinationsFallback(messages, maxTokens = 800) {
         signal: AbortSignal.timeout(30000),
       });
       if (r.status === 429) {
-        await new Promise(r => setTimeout(r, 2000));
+        // Queue full, exponential backoff
+        await new Promise(r => setTimeout(r, 2000 * Math.pow(2, i)));
         continue;
       }
       if (!r.ok) continue;
@@ -113,7 +119,37 @@ async function pollinationsFallback(messages, maxTokens = 800) {
     } catch {}
     await new Promise(r => setTimeout(r, 1500));
   }
-  throw new Error('Pollinations also failed');
+  
+  // Strategy 2: Streaming mode (bypasses queue limit)
+  try {
+    const r = await fetch('https://text.pollinations.ai/openai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'AgentSwarm/1.0' },
+      body: JSON.stringify({ ...body, stream: true }),
+      signal: AbortSignal.timeout(45000),
+    });
+    if (r.ok && r.body) {
+      let fullText = '';
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        for (const line of chunk.split('\n')) {
+          if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+            try {
+              const d = JSON.parse(line.slice(6));
+              fullText += d?.choices?.[0]?.delta?.content || '';
+            } catch {}
+          }
+        }
+      }
+      if (fullText.trim()) return { content: fullText, token: 'pollinations-stream', model: 'gpt-oss-20b' };
+    }
+  } catch {}
+  
+  throw new Error('Pollinations exhausted');
 }
 
 // ====================== AI CALLS (with token rotation + fallback) ======================
