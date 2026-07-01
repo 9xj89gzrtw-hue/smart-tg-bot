@@ -21,7 +21,7 @@ echo "   ✓ All .mjs files valid"
 
 # R4: Secret scan (no ghp_ or hf_ in tracked files, only in .env)
 echo "2. Secret scan..."
-SECRETS_FOUND=$(grep -rE 'ghp_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,}' /home/z/my-project/scripts/ /home/z/my-project/repo/ 2>/dev/null | grep -v '.env' | grep -v 'MEMORY.md' | head -5)
+SECRETS_FOUND=$(grep -rE --exclude-dir=.git 'ghp_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,}' /home/z/my-project/scripts/ /home/z/my-project/repo/ 2>/dev/null | grep -v '.env' | grep -v 'MEMORY.md' | head -5)
 if [ -n "$SECRETS_FOUND" ]; then
   echo "❌ Secrets found in source files:"
   echo "$SECRETS_FOUND"
