@@ -21,6 +21,7 @@ dns.setDefaultResultOrder('ipv4first');
 
 import fs from 'node:fs';
 import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
+import { smartChat as routerSmartChat } from './smart_router.mjs';
 
 // Load .env file (if exists) — keeps secrets out of source code
 try {
@@ -464,9 +465,43 @@ async function selfConsistencyVote(messages, options = {}, numCalls = 3) {
   return { content: consensus, confidence, allResponses: responses };
 }
 
-// ====================== MAIN CHAT (with full verification pipeline) ======================
+// ====================== MAIN CHAT (with smart router FIRST) ======================
 async function smartChat(text, history) {
   const startTime = Date.now();
+  
+  // STAGE 0: Try Smart Router FIRST (no AI, no rate limits)
+  // 80% of common questions (math, date, price, currency, weather, news, wiki) → instant
+  try {
+    const direct = await routerSmartChat(text, history);
+    if (direct && (direct.provider.startsWith('direct-') || direct.provider === 'cache')) {
+      // Direct hit — no need for verification pipeline
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      return {
+        content: direct.answer + `\n\n_(${direct.provider} | ${elapsed}s | no AI needed)_`,
+        provider: direct.provider,
+        elapsed,
+        stages: direct.stages || ['direct'],
+        issues: [],
+        liveData: true,
+        webSearch: false,
+      };
+    }
+    // AI was used by router — return as is
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    return {
+      content: direct.answer + `\n\n_(${direct.provider} | ${elapsed}s)_`,
+      provider: direct.provider,
+      elapsed,
+      stages: direct.stages || ['router'],
+      issues: [],
+      liveData: false,
+      webSearch: direct.stages?.includes('web-search'),
+    };
+  } catch (e) {
+    console.log('  Smart router failed, falling back to old pipeline:', e.message);
+  }
+  
+  // FALLBACK: Old verification pipeline (for edge cases)
   const stages = [];
   
   // STAGE 1: ALWAYS try live data first (Binance/Yahoo/HN/Wikipedia) — most reliable
@@ -475,7 +510,6 @@ async function smartChat(text, history) {
   try { liveData = await fetchLiveData(text); } catch {}
   
   // STAGE 2: FORCED web search for current-time questions
-  // If question is about "now/today/price/latest/news" → MUST search even if liveData found
   stages.push('web-search');
   let webSearchData = null;
   const smart = needsSmartAnswer(text);
@@ -485,7 +519,6 @@ async function smartChat(text, history) {
   if (forcedSearch) {
     try { 
       webSearchData = await webSearch(text, 5);
-      // If we already have live data, less results needed
       if (liveData && webSearchData) webSearchData = webSearchData.slice(0, 600);
     } catch {}
   }
@@ -522,21 +555,20 @@ async function smartChat(text, history) {
     provider = 'GLM-4-Plus+thinking';
   }
   
-  // STAGE 5: Outdated info detector — if answer mentions 2023/2024 but question is about current, retry with forced context
+  // STAGE 5: Outdated info detector
   if (forcedSearch && /2023 год|в 2024|по состоянию на 2024|2024 года|июн[ья] 2024/i.test(content) && !/202[5-9]/.test(content)) {
     stages.push('anti-outdated');
-    console.log('  ⚠️ Outdated info detected, forcing retry with stronger context...');
     const forceMsg = [
       ...messages,
       { role: 'assistant', content },
-      { role: 'user', content: `Твой ответ содержит УСТАРЕВШУЮ информацию (упоминание 2023/2024 года). СЕГОДНЯ 1 ИЮЛЯ 2026 ГОДА. Перепиши ответ используя ТОЛЬКО данные из [АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА] и [ДАННЫЕ ИЗ ВЕБ-ПОИСКА]. Не упоминай 2023/2024 год как текущие.` }
+      { role: 'user', content: `Твой ответ содержит УСТАРЕВШУЮ информацию (упоминание 2023/2024 года). СЕГОДНЯ 1 ИЮЛЯ 2026 ГОДА. Перепиши ответ используя ТОЛЬКО данные из [АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА] и [ДАННЫЕ ИЗ ВЕБ-ПОИСКА].` }
     ];
     const retry = await zaiChat(forceMsg, { thinking: true, maxTokens: 2500 });
     content = retry;
     provider += '+anti-outdated';
   }
   
-  // STAGE 6: Constitutional AI — verify and self-correct
+  // STAGE 6: Constitutional AI
   stages.push('verify');
   const verification = await constitutionalAI(content, text);
   if (!verification.pass) {
