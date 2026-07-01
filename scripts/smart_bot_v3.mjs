@@ -31,7 +31,7 @@ const META_PROMPT_FILE = '/home/z/my-project/repo/meta-prompt-v9.99-FINAL.md';
 const BACKUP_CHANNEL_FILE = '/home/z/my-project/scripts/backup_channel.txt';
 const BACKUP_CHANNEL_ID = (() => { try { return fs.readFileSync(BACKUP_CHANNEL_FILE, 'utf8').trim(); } catch { return null; } })();
 
-const GH_TOKEN = process.env.GH_TOKEN || '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';
+const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 const GH_REPO = '9xj89gzrtw-hue/smart-tg-bot';
 const GH_API = `https://api.github.com/repos/${GH_REPO}`;
 
@@ -187,12 +187,15 @@ async function hackerNews(top = 5) {
 async function fetchLiveData(query) {
   const q = query.toLowerCase();
   
-  // Crypto
-  const cryptoMatch = q.match(/(?:цена|price|курс|стоимость|сколько стоит).*?(btc|eth|bnb|sol|ada|xrp|doge|биткоин|эфир)/i) 
+  // Crypto — more aggressive matching
+  const cryptoMatch = q.match(/(?:цена|price|курс|стоимость|сколько стоит|сколько|стоит).*?(btc|eth|bnb|sol|ada|xrp|doge|биткоин|эфир|ethereum|bitcoin)/i) 
     || q.match(/(btc|eth|bnb|sol|ada|xrp|doge).*?(?:цена|price|курс|стоит|стоимость)/i)
-    || q.match(/биткоин|ethereum|bitcoin/i);
+    || q.match(/биткоин|ethereum|bitcoin|эфириум/i);
   if (cryptoMatch) {
-    const coin = (cryptoMatch[1] || '').toUpperCase() || (q.includes('биткоин') || q.includes('bitcoin') ? 'BTC' : q.includes('эфир') || q.includes('ethereum') ? 'ETH' : null);
+    const coin = (cryptoMatch[1] || '').toUpperCase() 
+      || (q.includes('биткоин') || q.includes('bitcoin') ? 'BTC' 
+         : q.includes('эфир') || q.includes('ethereum') || q.includes('эфириум') ? 'ETH' 
+         : null);
     if (coin) {
       const symbol = { BTC: 'BTCUSDT', ETH: 'ETHUSDT', BNB: 'BNBUSDT', SOL: 'SOLUSDT', ADA: 'ADAUSDT', XRP: 'XRPUSDT', DOGE: 'DOGEUSDT' }[coin];
       if (symbol) { try { return `📊 ${await binancePrice(symbol)} (Binance, real-time)`; } catch {} }
@@ -223,8 +226,50 @@ async function fetchLiveData(query) {
 
 function needsWebSearch(query) {
   const q = query.toLowerCase();
-  const triggers = ['последн','latest','newest','недавн','свеж','сегодн','today','вчера','yesterday','версия','version','release','выпуск','что нового','новости про','кто победил','результат','тренд','trend','новость','news','актуальн','actual','2025','2026','2027','когда','when','how much','сколько','кто лучше','сравни','compare','vs '];
+  // EXPANDED triggers — almost any "current" question needs web search
+  const triggers = [
+    'последн','latest','newest','недавн','свеж','сегодн','today','вчера','yesterday',
+    'версия','version','release','выпуск','что нового','новости про',
+    'кто победил','результат','тренд','trend','новость','news','актуальн','actual',
+    '2025','2026','2027','когда','when','how much','сколько','цена','price',
+    'кто лучше','сравни','compare','vs ','разница',
+    'сколько стоит','what.*price','current','текущ',
+    'чемпионат','матч','игра','турнир',
+    'президент','премьер','правительств',
+    'кто выиграл','who won','статистика','statistics',
+    'самый','лучш','худш','best','worst','top',
+    'что происходит','what.*happening',
+    'сколько людей','how many',
+    'out now','released','launched','доступн','available'
+  ];
   return triggers.some(t => q.includes(t));
+}
+
+// FORCE web search for many question types — never trust training data for "current" info
+function needsForcedWebSearch(query) {
+  const q = query.toLowerCase();
+  // If question contains any "current time" reference → MUST search
+  const forcedTriggers = [
+    'сколько стоит','цена','price','cost',
+    'курс','rate',
+    'сегодн','today','current','актуальн',
+    'последн','latest','newest','свеж',
+    'версия','version',
+    'когда выйд','when.*release',
+    'кто побед','who won',
+    'что нового','what.*new',
+    'чемпионат','матч','турнир','результат',
+    'новост','news',
+    'президент','prime minister','правительств',
+    'статистика','statistics','статистик',
+    'сколько.*сейчас','how many.*now',
+    'самый большой','largest','biggest',
+    'бирж','stock','акци',
+    'погода','weather',
+    'температур',
+    'результаты','results'
+  ];
+  return forcedTriggers.some(t => q.includes(t));
 }
 
 function needsSmartAnswer(text) {
@@ -391,18 +436,25 @@ async function smartChat(text, history) {
   const startTime = Date.now();
   const stages = [];
   
-  // STAGE 1: Live data (Binance/Yahoo/HN/Wikipedia)
+  // STAGE 1: ALWAYS try live data first (Binance/Yahoo/HN/Wikipedia) — most reliable
   stages.push('live-data');
   let liveData = null;
   try { liveData = await fetchLiveData(text); } catch {}
   
-  // STAGE 2: Web search (if needed)
+  // STAGE 2: FORCED web search for current-time questions
+  // If question is about "now/today/price/latest/news" → MUST search even if liveData found
   stages.push('web-search');
   let webSearchData = null;
   const smart = needsSmartAnswer(text);
   const math = needsMath(text);
-  if (!liveData && (needsWebSearch(text) || smart)) {
-    try { webSearchData = await webSearch(text, 5); } catch {}
+  const forcedSearch = needsForcedWebSearch(text) || needsWebSearch(text) || smart;
+  
+  if (forcedSearch) {
+    try { 
+      webSearchData = await webSearch(text, 5);
+      // If we already have live data, less results needed
+      if (liveData && webSearchData) webSearchData = webSearchData.slice(0, 600);
+    } catch {}
   }
   
   // STAGE 3: Build messages with context
@@ -412,25 +464,24 @@ async function smartChat(text, history) {
   ];
   
   let contextParts = [];
-  if (liveData) contextParts.push(`[АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА: ${liveData}]`);
-  if (webSearchData) contextParts.push(`[ДАННЫЕ ИЗ ВЕБ-ПОИСКА:\n${webSearchData}]`);
+  if (liveData) contextParts.push(`[АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА (источник правды): ${liveData}]`);
+  if (webSearchData) contextParts.push(`[ДАННЫЕ ИЗ ВЕБ-ПОИСКА (используй для актуальности):\n${webSearchData}]`);
   
-  const finalMsg = contextParts.length ? `${text}\n\n${contextParts.join('\n\n')}` : text;
+  const finalMsg = contextParts.length 
+    ? `${text}\n\n${contextParts.join('\n\n')}\n\nВАЖНО: Используй ТОЛЬКО эти данные для актуальной информации. Не отвечай по памяти.` 
+    : text;
   messages.push({ role: 'user', content: finalMsg });
   
-  // STAGE 4: Generate response (self-consistency for math, single+ensemble for smart, single for simple)
+  // STAGE 4: Generate response
   stages.push('generate');
-  let content, provider, confidence = null;
+  let content, provider;
   
   if (math) {
-    // Self-consistency voting for math
     stages.push('self-consistency');
     const r = await selfConsistencyVote(messages, { thinking: true, maxTokens: 2000 }, 3);
     content = r.content;
-    confidence = r.confidence;
-    provider = `GLM-4-Plus+vote(${confidence})`;
+    provider = `GLM-4-Plus+vote(${r.confidence})`;
   } else if (smart) {
-    // Single call with thinking (ensemble was hitting 429)
     content = await zaiChat(messages, { thinking: true, maxTokens: 4000 });
     provider = 'GLM-4-Plus+thinking';
   } else {
@@ -438,7 +489,21 @@ async function smartChat(text, history) {
     provider = 'GLM-4-Plus+thinking';
   }
   
-  // STAGE 5: Constitutional AI — verify and self-correct
+  // STAGE 5: Outdated info detector — if answer mentions 2023/2024 but question is about current, retry with forced context
+  if (forcedSearch && /2023 год|в 2024|по состоянию на 2024|2024 года|июн[ья] 2024/i.test(content) && !/202[5-9]/.test(content)) {
+    stages.push('anti-outdated');
+    console.log('  ⚠️ Outdated info detected, forcing retry with stronger context...');
+    const forceMsg = [
+      ...messages,
+      { role: 'assistant', content },
+      { role: 'user', content: `Твой ответ содержит УСТАРЕВШУЮ информацию (упоминание 2023/2024 года). СЕГОДНЯ 1 ИЮЛЯ 2026 ГОДА. Перепиши ответ используя ТОЛЬКО данные из [АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА] и [ДАННЫЕ ИЗ ВЕБ-ПОИСКА]. Не упоминай 2023/2024 год как текущие.` }
+    ];
+    const retry = await zaiChat(forceMsg, { thinking: true, maxTokens: 2500 });
+    content = retry;
+    provider += '+anti-outdated';
+  }
+  
+  // STAGE 6: Constitutional AI — verify and self-correct
   stages.push('verify');
   const verification = await constitutionalAI(content, text);
   if (!verification.pass) {
@@ -448,9 +513,9 @@ async function smartChat(text, history) {
   }
   
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const footer = `\n\n_(${provider} | ${elapsed}s${verification.issues.length ? ' | fixed: ' + verification.issues.length : ''})_`;
+  const footer = `\n\n_(${provider} | ${elapsed}s${verification.issues.length ? ' | fixed: ' + verification.issues.length : ''}${liveData ? ' | live' : ''}${webSearchData ? ' | search' : ''})_`;
   
-  return { content: content + footer, provider, elapsed, issues: verification.issues, stages };
+  return { content: content + footer, provider, elapsed, issues: verification.issues, stages, liveData: !!liveData, webSearch: !!webSearchData };
 }
 
 // ====================== TELEGRAM ======================
@@ -590,7 +655,46 @@ async function handleCommand(chatId, text, msg) {
     await reply('🔄 Sync GitHub...');
     await reply(`✅ ${await backupAllToGithub()}`);
   } else if (cmd === '/status') {
-    await reply(`*Статус v3*\n\n🟢 PID: ${process.pid}\n🧠 MEMORY: ${fs.existsSync(MEMORY_FILE)?'✓':'✗'}\n🧠 Meta: ${fs.existsSync(META_PROMPT_FILE)?'✓':'✗'}\n📡 Канал: ${BACKUP_CHANNEL_ID||'нет'}\n🐙 GitHub: ${GH_REPO}\n💬 Чатов: ${Object.keys(histories).length}\n✓ Truth Gateway\n✓ Math Verifier\n✓ CoT Enforcer\n✓ Constitutional AI\n✓ Self-consistency voting\n✓ Web search (z-ai SDK)\n✓ Live data (Binance/Yahoo/HN/Wikipedia)`);
+    await reply(`*Статус v3*\n\n🟢 PID: ${process.pid}\n🧠 MEMORY: ${fs.existsSync(MEMORY_FILE)?'✓':'✗'}\n🧠 Meta: ${fs.existsSync(META_PROMPT_FILE)?'✓':'✗'}\n📡 Канал: ${BACKUP_CHANNEL_ID||'нет'}\n🐙 GitHub: ${GH_REPO}\n💬 Чатов: ${Object.keys(histories).length}\n✓ Truth Gateway\n✓ Math Verifier\n✓ CoT Enforcer\n✓ Constitutional AI\n✓ Self-consistency voting\n✓ Web search (z-ai SDK)\n✓ Live data (Binance/Yahoo/HN/Wikipedia)\n🌐 Mode: ${WEBHOOK_MODE ? 'webhook' : 'polling'}`);
+  } else if (cmd === '/setghtoken') {
+    // Update GitHub token (when previous one was revoked)
+    const newToken = text.split(' ')[1];
+    if (!newToken || !newToken.startsWith('ghp_')) {
+      await reply('Использование: `/setghtoken ghp_xxx`');
+      return;
+    }
+    // Test new token
+    try {
+      const r = await fetch('https://api.github.com/user', { headers: { 'Authorization': `token ${newToken}` } });
+      const d = await r.json();
+      if (!d.login) {
+        await reply(`❌ Токен невалидный: ${d.message}`);
+        return;
+      }
+      // Update token in this file (GH_TOKEN constant)
+      const botFile = fs.readFileSync('/home/z/my-project/scripts/smart_bot_v3.mjs', 'utf8');
+      const updated = botFile.replace(/const GH_TOKEN = process\.env\.GH_TOKEN \|\| '[^']+'/, `const GH_TOKEN = process.env.GH_TOKEN || '${newToken}'`);
+      fs.writeFileSync('/home/z/my-project/scripts/smart_bot_v3.mjs', updated);
+      
+      // Also update in smart_bot_v2.mjs
+      try {
+        const v2 = fs.readFileSync('/home/z/my-project/scripts/smart_bot_v2.mjs', 'utf8');
+        const v2updated = v2.replace(/const GH_TOKEN = process\.env\.GH_TOKEN \|\| '[^']+'/, `const GH_TOKEN = process.env.GH_TOKEN || '${newToken}'`);
+        fs.writeFileSync('/home/z/my-project/scripts/smart_bot_v2.mjs', v2updated);
+      } catch {}
+      
+      // Test push
+      const ok = await githubPush('test.txt', `Token updated ${new Date().toISOString()}`, 'Token refresh test');
+      await reply(`✅ GitHub токен обновлён!\nUser: ${d.login}\nPush test: ${ok ? '✓' : '✗'}\n\nБот перезапустится с новым токеном через 5 сек.`);
+      
+      // Restart self
+      setTimeout(() => process.exit(0), 5000);
+    } catch (e) {
+      await reply(`❌ Ошибка: ${e.message}`);
+    }
+  } else if (cmd === '/deploy') {
+    // Show deployment instructions
+    await reply(`📦 *Деплой на Render (3 минуты):*\n\n1. Создай новый GitHub token: https://github.com/settings/tokens/new\n   Scopes: repo, workflow\n2. Отправь боту: \`/setghtoken ghp_xxx\`\n3. Зарегистрируйся на https://render.com (через GitHub)\n4. New + → Blueprint → выбери репо smart-tg-bot\n5. Add env var: \`TG_TOKEN=8736969974:AAG66M9I0uGwRUksTt1iJt7v-n-f7T7BpnE\`\n6. Create → готово\n\nRender сам установит webhook. Бот будет 24/7.`);
   } else if (cmd === '/prompt' || cmd === '/промпт') {
     const topic = text.replace(/^\/(prompt|промпт)\s*/i, '').trim();
     if (!topic) { await reply('Использование: `/prompt <тема>`'); return; }
@@ -666,10 +770,71 @@ await tg('setMyCommands', { commands: [
   { command: 'prompt', description: '🧠 Лучший промпт' },
   { command: 'clear', description: 'Очистить контекст' },
   { command: 'status', description: 'Статус' },
+  { command: 'deploy', description: '📦 Инструкция деплоя' },
+  { command: 'setghtoken', description: '🔧 Обновить GH токен' },
   { command: 'meta', description: 'Мета-промпт' },
   { command: 'memory', description: 'MEMORY' },
   { command: 'backup', description: 'Backup в канал' },
   { command: 'sync', description: 'Backup в GitHub' },
 ]});
-console.log('✅ Bot v3 ready.');
-poll();
+
+// Detect mode: webhook (Render) or polling (sandbox/local)
+const WEBHOOK_MODE = process.env.WEBHOOK_MODE === 'true' || process.env.PORT;
+const PORT = process.env.PORT || 10000;
+
+if (WEBHOOK_MODE) {
+  // Webhook mode — for Render/HF Spaces/Vercel
+  console.log(`   Mode: WEBHOOK (port ${PORT})`);
+  
+  const http = await import('node:http');
+  const server = http.createServer(async (req, res) => {
+    if (req.method === 'GET' && req.url === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', uptime: process.uptime(), bot: 'v3' }));
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/webhook') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', async () => {
+        res.writeHead(200);
+        res.end('{"ok":true}');
+        try {
+          const upd = JSON.parse(body);
+          await handleUpdate(upd);
+        } catch (e) {
+          console.error('webhook err:', e.message);
+        }
+      });
+      return;
+    }
+    res.writeHead(404);
+    res.end('Not found');
+  });
+  
+  server.listen(PORT, () => {
+    console.log(`✅ Bot v3 webhook listening on :${PORT}`);
+  });
+  
+  // Set webhook to Render URL (must be set via env RENDER_EXTERNAL_URL or manual)
+  const externalUrl = process.env.RENDER_EXTERNAL_URL || process.env.WEBHOOK_URL;
+  if (externalUrl) {
+    const webhookUrl = `${externalUrl}/webhook`;
+    console.log(`   Setting webhook to: ${webhookUrl}`);
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/setWebhook?url=${webhookUrl}&allowed_updates=%5B%22message%22%2C%22channel_post%22%5D`)
+      .then(r => r.json())
+      .then(d => console.log('   Webhook set:', d.ok, d.description || ''));
+  } else {
+    console.log('   ⚠️ RENDER_EXTERNAL_URL or WEBHOOK_URL not set, polling fallback');
+    // Fallback to polling if no external URL
+    poll();
+  }
+} else {
+  // Polling mode — for sandbox/local
+  console.log('   Mode: POLLING');
+  console.log('✅ Bot v3 ready.');
+  poll();
+}
+
+// Export handleUpdate for webhook mode
+// (handleUpdate is defined above in the file)
