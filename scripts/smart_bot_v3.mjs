@@ -22,6 +22,7 @@ dns.setDefaultResultOrder('ipv4first');
 import fs from 'node:fs';
 import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
 import { smartChat as routerSmartChat } from './smart_router.mjs';
+import { solveWithSwarm, massProcess, GH_TOKENS, tokenState } from './agent_swarm.mjs';
 
 // Load .env file (if exists) — keeps secrets out of source code
 try {
@@ -759,6 +760,80 @@ async function handleCommand(chatId, text, msg) {
     } catch (e) {
       await reply(`❌ Ошибка: ${e.message}`);
     }
+  } else if (cmd === '/swarm') {
+    // /swarm <question> — solve with N parallel agents
+    const parts = text.split(' ');
+    let numAgents = 5;
+    let question = '';
+    if (parts.length >= 2 && /^\d+$/.test(parts[1])) {
+      numAgents = Math.min(parseInt(parts[1]), 50);
+      question = parts.slice(2).join(' ');
+    } else {
+      question = parts.slice(1).join(' ');
+    }
+    if (!question) {
+      await reply('Использование: `/swarm <question>` или `/swarm 10 <question>` (10 agents)\n\nПример:\n`/swarm 10 Сравни 10 языков программирования для веб-разработки`');
+      return;
+    }
+    await reply(`🐝 Запускаю ${numAgents} параллельных агентов для:\n*${question}*\n\n⏳ decompose → parallel solve → aggregate...`);
+    sendTyping(chatId).catch(() => {});
+    const tIv = setInterval(() => sendTyping(chatId).catch(() => {}), 4000);
+    try {
+      const t0 = Date.now();
+      const r = await solveWithSwarm(question, numAgents);
+      clearInterval(tIv);
+      const summary = `✅ *Готово за ${r.elapsed}s!*\n\n*Агентов:* ${r.agentsCompleted} success, ${r.agentsFailed} failed\n*Провайдер:* ${r.provider}\n\n*Ответ:*\n${r.finalAnswer.slice(0, 3500)}`;
+      await sendMsg(chatId, summary, msg.message_id);
+      // If answer is very long, also send as file
+      if (r.finalAnswer.length > 3500) {
+        await sendDocument(chatId, r.finalAnswer, `swarm_answer.md`, `🐝 Swarm (${numAgents} agents)`);
+      }
+    } catch (e) {
+      clearInterval(tIv);
+      await reply(`❌ ${e.message}`);
+    }
+  } else if (cmd === '/addtoken') {
+    // /addtoken ghp_xxx — add another GH token for more parallel capacity
+    const newToken = text.split(' ')[1];
+    if (!newToken || !newToken.startsWith('ghp_')) {
+      await reply('Использование: `/addtoken ghp_xxx`\n\nСоздать ещё токен: https://github.com/settings/tokens/new (scopes: nothing special needed for GitHub Models — they are free for any user)');
+      return;
+    }
+    // Test token
+    try {
+      const r = await fetch('https://models.inference.ai.azure.com/models', {
+        headers: { 'Authorization': `Bearer ${newToken}` },
+      });
+      if (!r.ok) {
+        await reply(`❌ Токен невалидный для GH Models: HTTP ${r.status}`);
+        return;
+      }
+      // Add to .env GH_TOKENS
+      const envFile = '/home/z/my-project/.env';
+      let envContent = fs.readFileSync(envFile, 'utf8');
+      if (envContent.includes('GH_TOKENS=')) {
+        envContent = envContent.replace(/GH_TOKENS=([^\n]*)/, (m, tokens) => `GH_TOKENS=${tokens},${newToken}`);
+      } else {
+        envContent += `\nGH_TOKENS=${newToken}`;
+      }
+      fs.writeFileSync(envFile, envContent.trim() + '\n');
+      await reply(`✅ Токен добавлен!\n\nТокенов в пуле: ${GH_TOKENS.length + 1}\nCapacity: ${(GH_TOKENS.length + 1) * 15} req/min = ${(GH_TOKENS.length + 1) * 15 * 60} req/hour\n\nБот перезапустится через 3 сек.`);
+      setTimeout(() => process.exit(0), 3000);
+    } catch (e) {
+      await reply(`❌ ${e.message}`);
+    }
+  } else if (cmd === '/tokens') {
+    // Show token pool stats
+    if (GH_TOKENS.length === 0) {
+      await reply('Нет токенов в пуле. Добавьте через /addtoken ghp_xxx');
+      return;
+    }
+    let stats = `*Token Pool (${GH_TOKENS.length} токенов)*\n\n`;
+    stats += `*Capacity:* ${GH_TOKENS.length * 15} req/min = ${GH_TOKENS.length * 15 * 60} req/hour\n\n`;
+    for (const t of tokenState) {
+      stats += `• ${t.token.slice(0, 10)}...: ✓${t.successCount} ✗${t.failCount} (total: ${t.totalRequests})\n`;
+    }
+    await reply(stats);
   } else if (cmd === '/deploy') {
     // Show deployment instructions
     await reply(`📦 *Деплой на Render (3 минуты):*\n\n1. Создай новый GitHub token: https://github.com/settings/tokens/new\n   Scopes: repo, workflow\n2. Отправь боту: \`/setghtoken ghp_xxx\`\n3. Зарегистрируйся на https://render.com (через GitHub)\n4. New + → Blueprint → выбери репо smart-tg-bot\n5. Add env var: \`TG_TOKEN=8736969974:AAG66M9I0uGwRUksTt1iJt7v-n-f7T7BpnE\`\n6. Create → готово\n\nRender сам установит webhook. Бот будет 24/7.`);
@@ -834,11 +909,12 @@ console.log(`   Verifications: Truth Gateway + Math Verifier + CoT + Constitutio
 await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_updates=false`).then(r=>r.json()).then(d=>console.log('   Webhook deleted:', d.ok));
 await tg('setMyCommands', { commands: [
   { command: 'help', description: 'Помощь' },
+  { command: 'swarm', description: '🐝 Параллельные агенты' },
   { command: 'prompt', description: '🧠 Лучший промпт' },
+  { command: 'tokens', description: '🐝 Статус токенов' },
+  { command: 'addtoken', description: '➕ Добавить GH токен' },
   { command: 'clear', description: 'Очистить контекст' },
   { command: 'status', description: 'Статус' },
-  { command: 'deploy', description: '📦 Инструкция деплоя' },
-  { command: 'setghtoken', description: '🔧 Обновить GH токен' },
   { command: 'meta', description: 'Мета-промпт' },
   { command: 'memory', description: 'MEMORY' },
   { command: 'backup', description: 'Backup в канал' },
