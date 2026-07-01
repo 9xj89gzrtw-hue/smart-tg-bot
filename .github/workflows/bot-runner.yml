@@ -1,0 +1,69 @@
+name: Smart Bot 24/7 Runner
+
+on:
+  schedule:
+    # Restart every 5 hours (GH Actions max job time = 6h)
+    - cron: '0 */5 * * *'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5.5 hours, leave buffer for restart
+    env:
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+      ALLOWED_CHATS: ${{ secrets.ALLOWED_CHATS }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      ZAI_BASE: ${{ secrets.ZAI_BASE }}
+      ZAI_TOKEN: ${{ secrets.ZAI_TOKEN }}
+      ZAI_CHAT_ID: ${{ secrets.ZAI_CHAT_ID }}
+      ZAI_USER_ID: ${{ secrets.ZAI_USER_ID }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install z-ai SDK globally
+        run: npm install -g z-ai-web-dev-sdk@0.0.18
+      
+      - name: Create z-ai config (if secrets available)
+        run: |
+          if [ -n "$ZAI_BASE" ] && [ -n "$ZAI_TOKEN" ]; then
+            sudo mkdir -p /etc
+            echo "{\"baseUrl\":\"$ZAI_BASE\",\"apiKey\":\"Z.ai\",\"chatId\":\"$ZAI_CHAT_ID\",\"userId\":\"$ZAI_USER_ID\",\"token\":\"$ZAI_TOKEN\"}" | sudo tee /etc/.z-ai-config > /dev/null
+            sudo chmod 644 /etc/.z-ai-config
+            echo "✅ z-ai config created"
+          else
+            echo "⚠️ z-ai secrets not set, will use Pollinations only"
+          fi
+      
+      - name: Restore MEMORY from GitHub
+        run: |
+          # MEMORY.md is already in repo, just ensure it's writable
+          cp MEMORY.md /tmp/MEMORY.md.bak
+          echo "✅ MEMORY backed up"
+      
+      - name: Start Smart Bot
+        run: |
+          echo "🚀 Starting bot v3..."
+          # Run bot with timeout 5h
+          timeout 300m node scripts/smart_bot_v3.mjs || true
+          echo "Bot stopped, will restart on next cron"
+      
+      - name: Commit updated MEMORY (if changed)
+        if: always()
+        run: |
+          git config user.name "Smart Bot"
+          git config user.email "bot@smart-tg-bot"
+          git add MEMORY.md scripts/bot_history.json 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "🤖 Auto-update MEMORY/history from bot run $(date -u +'%Y-%m-%d %H:%M')" || true
+            git push || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
