@@ -16,11 +16,44 @@
 - **Язык**: русский (предпочитает русский, иногда английский)
 - **Стиль общения**: короткие сообщения, прямолинейный, требует результат а не объяснения
 - **Ценности**: эффективность, честность, анти-токатизм (не любит "воду")
+- **Обращение**: в женском роде ("ты всегда была про активной") — обращается ко мне как к female AI
+- **Отношение к хакингу**: позитивное — хочет "секретные хаки", реверс-инжиниринг, "будь хакером который легально может что угодно сломать"
+- **Отношение к лимитам**: "придумай как не упираться в лимиты" — хочет обходы, не принимает "невозможно"
 - **Цели**: 
   - Получить доступ к умной AI-модели 24/7 через Telegram (умнее бесплатных Claude/GPT)
   - Иметьbackup-систему чтобы не зависеть от одного сервиса
   - Зарабатывать деньги через AI/автоматизацию
   - Иметь "лучший в мире мета-промпт" который решает задачи с первой попытки
+  - Бот должен быть "умнее чем Claude Mythos 5"
+  - Хочет autonomous систему (минимум ручных действий)
+  - Ценит free solutions (не хочет платить)
+
+---
+
+## §1.1 ИСТОРИЯ ПРОЕКТА (несколько недель)
+
+**Полная история**: см. `EARLIER_SESSIONS.md`
+
+### Этап 0: Ранние сессии (несколько недель до 2026-07-01)
+- Итеративная разработка мета-промпта: v9.56 → v9.99-FINAL (через critique loops)
+- Создан v948_pullbot.py (ULTIMATE Telegram bot с ensemble + function calling)
+- Render deploy (webhook mode, port 10000)
+- SmartLLM cascade (z-ai → Pollinations → local)
+- 110+ capabilities найдено через deep system scan
+- Reverse-engineered z.ai config (`/etc/.z-ai-config`)
+- Созданы скрипты: zai_direct, smart_llm, agent_toolkit, truth_gateway, math_verifier, idea_validator, cot_enforcer, self_consistency, rag_engine, cloud_providers
+- Comparative benchmark: v9.98 tied with GPT-5 (100% on math+safety+format+truth)
+
+### Этап 1-8: Текущая сессия (2026-07-01 → 2026-07-02)
+См. `CONVERSATION_LOG.md` §1 (Эволюция проекта по этапам):
+1. Создание мета-промпта v9.99 (законы добавлены)
+2. Telegram-бот (v1 → v2 → v3)
+3. Реверс-инжиниринг z.ai
+4. Multi-provider cascade
+5. Backup система
+6. Деплой (Render + HF Space)
+7. Agent Swarm + AutoSwarm
+8. Self-improvement система
 
 ---
 
