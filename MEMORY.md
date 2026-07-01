@@ -93,11 +93,26 @@ const results = await z.functions.invoke('web_search', { query: 'X', num: 3 });
 - **Готово к serverless**: можно деплоить на Vercel/Cloudflare Workers
 
 ### GitHub auto-push (backup)
-- **Repo**: `9xj89gzrtw-hue/smart-tg-bot` (PRIVATE)
-- **Token**: `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`
+- **Repo**: `9xj89gzrtw-hue/smart-tg-bot` (PUBLIC — для unlimited GitHub Actions)
+- **Token**: БЫЛ ОТЗОВАН GitHub (auto-revoked из-за публикации в публичном репо)
 - **API**: `PUT /repos/{owner}/{repo}/contents/{path}` с `content: base64` и `sha` (если файл существует)
 - **Команда в боте**: `/sync` — пушит все файлы
-- **Что пушится**: smart_bot_v2.mjs, MEMORY.md, meta-prompt, restore.sh, deploy_vercel/
+- **Команда `/setghtoken <new_token>`**: обновляет GH токен через Telegram (тестирует, обновляет, перезапускает бота)
+- **Что пушится**: smart_bot_v3.mjs, MEMORY.md, meta-prompt, restore.sh, deploy_vercel/, external_deploy/hf_space/
+
+### Деплой вне песочницы (готово к запуску)
+1. **HuggingFace Spaces** (Docker, 16GB RAM, free, без лимитов) — `external_deploy/hf_space/`
+   - Dockerfile + supervisord + start.sh (auto-pull from GitHub)
+   - Требует: HF аккаунт (нужен token)
+2. **Render** (free 750h/мес, webhook mode) — `render.yaml` в репо
+   - Авто-деплой из GitHub при push
+   - Требует: подключить GitHub аккаунт
+3. **GitHub Actions** (free unlimited для public repos) — `.github/workflows/bot-runner.yml`
+   - Cron каждые 5 часов (max job time = 6h)
+   - Требует: GitHub secrets (TG_TOKEN, ALLOWED_CHATS, GH_TOKEN)
+4. **Бот v3 поддерживает оба режима**: 
+   - `WEBHOOK_MODE=true` или `PORT=xxx` env var → webhook mode (Render/HF/Vercel)
+   - Иначе → polling mode (песочница/local)
 
 ### Backup-канал Telegram
 - **Chat ID**: `-1003609243674`
