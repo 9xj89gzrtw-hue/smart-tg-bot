@@ -22,6 +22,15 @@ dns.setDefaultResultOrder('ipv4first');
 import fs from 'node:fs';
 import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
 
+// Load .env file (if exists) — keeps secrets out of source code
+try {
+  const envContent = fs.readFileSync('/home/z/my-project/.env', 'utf8');
+  for (const line of envContent.split('\n')) {
+    const m = line.match(/^([A-Z_]+)=(.*)$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
+  }
+} catch {}
+
 // ====================== CONFIG ======================
 const TG_TOKEN = process.env.TG_TOKEN || '8736969974:AAG66M9I0uGwRUksTt1iJt7v-n-f7T7BpnE';
 const ALLOWED_CHATS = new Set((process.env.ALLOWED_CHATS || '396449039').split(','));
@@ -657,7 +666,7 @@ async function handleCommand(chatId, text, msg) {
   } else if (cmd === '/status') {
     await reply(`*Статус v3*\n\n🟢 PID: ${process.pid}\n🧠 MEMORY: ${fs.existsSync(MEMORY_FILE)?'✓':'✗'}\n🧠 Meta: ${fs.existsSync(META_PROMPT_FILE)?'✓':'✗'}\n📡 Канал: ${BACKUP_CHANNEL_ID||'нет'}\n🐙 GitHub: ${GH_REPO}\n💬 Чатов: ${Object.keys(histories).length}\n✓ Truth Gateway\n✓ Math Verifier\n✓ CoT Enforcer\n✓ Constitutional AI\n✓ Self-consistency voting\n✓ Web search (z-ai SDK)\n✓ Live data (Binance/Yahoo/HN/Wikipedia)\n🌐 Mode: ${WEBHOOK_MODE ? 'webhook' : 'polling'}`);
   } else if (cmd === '/setghtoken') {
-    // Update GitHub token (when previous one was revoked)
+    // Update GitHub token (saved to .env file, not hardcoded in source)
     const newToken = text.split(' ')[1];
     if (!newToken || !newToken.startsWith('ghp_')) {
       await reply('Использование: `/setghtoken ghp_xxx`');
@@ -671,24 +680,26 @@ async function handleCommand(chatId, text, msg) {
         await reply(`❌ Токен невалидный: ${d.message}`);
         return;
       }
-      // Update token in this file (GH_TOKEN constant)
-      const botFile = fs.readFileSync('/home/z/my-project/scripts/smart_bot_v3.mjs', 'utf8');
-      const updated = botFile.replace(/const GH_TOKEN = process\.env\.GH_TOKEN \|\| '[^']+'/, `const GH_TOKEN = process.env.GH_TOKEN || '${newToken}'`);
-      fs.writeFileSync('/home/z/my-project/scripts/smart_bot_v3.mjs', updated);
-      
-      // Also update in smart_bot_v2.mjs
-      try {
-        const v2 = fs.readFileSync('/home/z/my-project/scripts/smart_bot_v2.mjs', 'utf8');
-        const v2updated = v2.replace(/const GH_TOKEN = process\.env\.GH_TOKEN \|\| '[^']+'/, `const GH_TOKEN = process.env.GH_TOKEN || '${newToken}'`);
-        fs.writeFileSync('/home/z/my-project/scripts/smart_bot_v2.mjs', v2updated);
-      } catch {}
+      // Save to .env file (NOT to source code — GitHub blocks secrets in code)
+      const envFile = '/home/z/my-project/.env';
+      let envContent = '';
+      try { envContent = fs.readFileSync(envFile, 'utf8'); } catch {}
+      // Update or add GH_TOKEN line
+      if (envContent.includes('GH_TOKEN=')) {
+        envContent = envContent.replace(/GH_TOKEN=[^\n]*/, `GH_TOKEN=${newToken}`);
+      } else {
+        envContent += `\nGH_TOKEN=${newToken}`;
+      }
+      fs.writeFileSync(envFile, envContent.trim() + '\n');
+      // Set in current process
+      process.env.GH_TOKEN = newToken;
       
       // Test push
-      const ok = await githubPush('test.txt', `Token updated ${new Date().toISOString()}`, 'Token refresh test');
-      await reply(`✅ GitHub токен обновлён!\nUser: ${d.login}\nPush test: ${ok ? '✓' : '✗'}\n\nБот перезапустится с новым токеном через 5 сек.`);
+      const ok = await githubPush('test_token.txt', `Token updated ${new Date().toISOString()}`, 'Token refresh test');
+      await reply(`✅ GitHub токен сохранён в .env!\nUser: ${d.login}\nPush test: ${ok ? '✓' : '✗'}\n\nТокен НЕ в коде (GitHub блокирует secrets в репо). Используется env var.\n\nБот перезапустится через 3 сек.`);
       
       // Restart self
-      setTimeout(() => process.exit(0), 5000);
+      setTimeout(() => process.exit(0), 3000);
     } catch (e) {
       await reply(`❌ Ошибка: ${e.message}`);
     }
