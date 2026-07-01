@@ -1,0 +1,84 @@
+name: Auto-Deploy to HF Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Sync to HuggingFace Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Files to sync from GitHub to HF Space
+          FILES=(
+            "smart_bot_v3.mjs"
+            "Dockerfile"
+            "start.sh"
+            "README.md"
+            "MEMORY.md"
+            "SELF_IMPROVEMENT.md"
+            "META_PROMPT_QUICK_REF.md"
+            "CONVERSATION_LOG.md"
+            "EARLIER_SESSIONS.md"
+            "TECHNICAL_DISCOVERIES.md"
+            "FAILED_ATTEMPTS.md"
+            "pre_commit.sh"
+            "health_monitor.mjs"
+            "auto_deploy.mjs"
+          )
+          
+          for file in "${FILES[@]}"; do
+            if [ -f "scripts/$file" ] || [ -f "$file" ]; then
+              # Find file (could be in scripts/ or root)
+              SOURCE=""
+              [ -f "scripts/$file" ] && SOURCE="scripts/$file"
+              [ -f "$file" ] && SOURCE="$file"
+              
+              if [ -n "$SOURCE" ]; then
+                CONTENT=$(base64 -w 0 "$SOURCE")
+                echo "Pushing $file (from $SOURCE)..."
+                
+                # Get existing SHA
+                SHA=$(curl -s "https://huggingface.co/api/spaces/danilaonly/smart-tg-bot/tree/main/$file" \
+                  -H "Authorization: Bearer $HF_TOKEN" | jq -r '.sha // empty' 2>/dev/null)
+                
+                # Push via commit API
+                PAYLOAD=$(jq -n \
+                  --arg summary "Auto-deploy $file from GitHub" \
+                  --arg path "$file" \
+                  --arg content "$CONTENT" \
+                  '{summary: $summary, files: [{path: $path, content: $content, encoding: "base64"}]}')
+                
+                curl -s -X POST "https://huggingface.co/api/spaces/danilaonly/smart-tg-bot/commit/main" \
+                  -H "Authorization: Bearer $HF_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "$PAYLOAD" | jq -r '.commitOid // .error // "failed"'
+              fi
+            fi
+          done
+          
+          echo "✅ Sync to HF Space complete"
+      
+      - name: Notify Telegram on deploy
+        if: success()
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": 396449039,
+              \"text\": \"📦 Auto-deploy to HF Space complete\\n\\nCommit: ${{ github.sha }}\\nMessage: ${{ github.event.head_commit.message }}\\n\\nBot will restart automatically.\"
+            }"
