@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
 import { smartChat as routerSmartChat } from './smart_router.mjs';
 import { solveWithSwarm, massProcess, GH_TOKENS, tokenState } from './agent_swarm.mjs';
+import { autoSwarm, queueBackgroundTask, getQueueStatus, selfDiagnostic } from './auto_swarm.mjs';
 
 // Load .env file (if exists) — keeps secrets out of source code
 try {
@@ -834,6 +835,37 @@ async function handleCommand(chatId, text, msg) {
       stats += `• ${t.token.slice(0, 10)}...: ✓${t.successCount} ✗${t.failCount} (total: ${t.totalRequests})\n`;
     }
     await reply(stats);
+  } else if (cmd === '/diag') {
+    // Self-diagnostic
+    await reply('🔍 Running diagnostics...');
+    const checks = await selfDiagnostic();
+    let report = '*🔍 System Diagnostic*\n\n';
+    for (const c of checks) {
+      report += `${c.ok ? '✓' : '✗'} ${c.name}: ${c.detail || ''}\n`;
+    }
+    const failed = checks.filter(c => !c.ok).length;
+    report += `\n*Result:* ${checks.length - failed}/${checks.length} checks passed`;
+    await reply(report);
+  } else if (cmd === '/queue') {
+    const q = getQueueStatus();
+    if (q.length === 0) {
+      await reply('Queue empty.');
+    } else {
+      let report = '*Background tasks:*\n\n';
+      for (const t of q) {
+        report += `• [${t.status}] ${t.task} (${t.elapsed})\n`;
+      }
+      await reply(report);
+    }
+  } else if (cmd === '/bg') {
+    // /bg <task> — run in background, get notification when done
+    const task = text.replace(/^\/bg\s*/i, '').trim();
+    if (!task) {
+      await reply('Использование: `/bg <task>` — задача выполнится в фоне, вы получите уведомление');
+      return;
+    }
+    const taskId = await queueBackgroundTask(chatId, task, { agents: 5 });
+    await reply(`✅ Задача поставлена в фон!\n\nID: ${taskId}\n\nВы получите уведомление когда она будет готова. Можно продолжать общаться со мной.`);
   } else if (cmd === '/deploy') {
     // Show deployment instructions
     await reply(`📦 *Деплой на Render (3 минуты):*\n\n1. Создай новый GitHub token: https://github.com/settings/tokens/new\n   Scopes: repo, workflow\n2. Отправь боту: \`/setghtoken ghp_xxx\`\n3. Зарегистрируйся на https://render.com (через GitHub)\n4. New + → Blueprint → выбери репо smart-tg-bot\n5. Add env var: \`TG_TOKEN=8736969974:AAG66M9I0uGwRUksTt1iJt7v-n-f7T7BpnE\`\n6. Create → готово\n\nRender сам установит webhook. Бот будет 24/7.`);
@@ -876,18 +908,20 @@ async function poll() {
         const tIv = setInterval(() => sendTyping(chatId).catch(() => {}), 4000);
         
         try {
+          // AUTO SWARM: automatically decides # agents based on question complexity
           const history = histories[chatId] || [];
-          const result = await smartChat(text, history);
+          const result = await autoSwarm(text, history);
           clearInterval(tIv);
           
           histories[chatId] = histories[chatId] || [];
           histories[chatId].push({ role: 'user', content: text });
-          histories[chatId].push({ role: 'assistant', content: result.content });
+          histories[chatId].push({ role: 'assistant', content: result.answer });
           if (histories[chatId].length > 16) histories[chatId].splice(0, histories[chatId].length - 16);
           saveHistories();
           
-          await sendMsg(chatId, result.content, msg.message_id);
-          console.log(`  -> [${result.provider}] ${result.elapsed}s stages: ${result.stages.join('→')}${result.issues.length ? ' fixed:'+result.issues.length : ''}`);
+          const tag = result.agents > 1 ? ` ×${result.agents} agents` : '';
+          await sendMsg(chatId, result.answer + `\n\n_(${result.provider}${tag} | ${result.elapsed}s)_`, msg.message_id);
+          console.log(`  -> [${result.provider}] ${result.agents} agents | ${result.elapsed}s`);
         } catch (e) {
           clearInterval(tIv);
           await sendMsg(chatId, `❌ ${e.message}`, msg.message_id);
@@ -910,10 +944,12 @@ await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_
 await tg('setMyCommands', { commands: [
   { command: 'help', description: 'Помощь' },
   { command: 'swarm', description: '🐝 Параллельные агенты' },
+  { command: 'bg', description: '🔄 Фоновая задача' },
+  { command: 'diag', description: '🔍 Диагностика' },
+  { command: 'queue', description: '📋 Фоновые задачи' },
   { command: 'prompt', description: '🧠 Лучший промпт' },
   { command: 'tokens', description: '🐝 Статус токенов' },
-  { command: 'addtoken', description: '➕ Добавить GH токен' },
-  { command: 'clear', description: 'Очистить контекст' },
+  { command: 'addtoken', description: '➕ Добавить токен' },
   { command: 'status', description: 'Статус' },
   { command: 'meta', description: 'Мета-промпт' },
   { command: 'memory', description: 'MEMORY' },
