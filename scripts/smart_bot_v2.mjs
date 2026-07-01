@@ -515,15 +515,40 @@ async function handleUpdate(upd) {
     
     const { content, provider } = await chat(messages);
     
+    // STEP 3: Auto-rescue — if model said "I can't" but question needs fresh info, force web search
+    let finalContent = content;
+    let rescueProvider = provider;
+    let rescueTag = '';
+    const isCantAnswer = /не могу|не знаю|я не имею|я не могу|not able to|i can'?t|i don'?t know|no access to/i.test(content);
+    const needsFreshInfo = needsWebSearch(text) || /чемпионат|матч|результат|кто побед|сегодня|вчера|недавно|current|latest|новости/i.test(text);
+    
+    if (isCantAnswer && needsFreshInfo && !webSearchData && !liveData) {
+      console.log('  ⚠️ Model said "can\'t", forcing web search...');
+      sendTyping(chatId).catch(() => {});
+      const rescueData = await webSearch(text, 5);
+      if (rescueData) {
+        const rescueMessages = [
+          ...messages,
+          { role: 'assistant', content },
+          { role: 'user', content: `Я нашёл свежие данные в вебе. Используй их чтобы ответить:\n\n[ВЕБ-ПОИСК:\n${rescueData}]\n\nОтветь коротко и по делу, опираясь на эти данные.` },
+        ];
+        const r2 = await chat(rescueMessages);
+        finalContent = r2.content;
+        rescueProvider = r2.provider;
+        rescueTag = '+rescue';
+      }
+    }
+    
     addToHistory(chatId, 'user', text);
-    addToHistory(chatId, 'assistant', content);
+    addToHistory(chatId, 'assistant', finalContent);
     
     const tags = [];
     if (liveData) tags.push('live');
     if (webSearchData) tags.push('search');
-    const footer = tags.length ? `\n\n_(${provider}+${tags.join('+')})_` : `\n\n_(${provider})_`;
-    await sendMsg(chatId, content + footer, msg.message_id);
-    console.log(`  -> [${provider}${tags.length ? '+' + tags.join('+') : ''}] ${content.slice(0, 80)}`);
+    if (rescueTag) tags.push('rescue');
+    const footer = tags.length ? `\n\n_(${rescueProvider}+${tags.join('+')})_` : `\n\n_(${provider})_`;
+    await sendMsg(chatId, finalContent + footer, msg.message_id);
+    console.log(`  -> [${rescueProvider}${tags.length ? '+' + tags.join('+') : ''}] ${finalContent.slice(0, 80)}`);
   } catch (e) {
     await sendMsg(chatId, `❌ Ошибка: ${e.message}`, msg.message_id);
   } finally {
