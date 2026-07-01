@@ -29,7 +29,7 @@ const BACKUP_CHANNEL_FILE = '/home/z/my-project/scripts/backup_channel.txt';
 const BACKUP_CHANNEL_ID = (() => { try { return fs.readFileSync(BACKUP_CHANNEL_FILE, 'utf8').trim(); } catch { return null; } })();
 
 // GitHub auto-push config
-const GH_TOKEN = process.env.GH_TOKEN || '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';
+const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 const GH_REPO = '9xj89gzrtw-hue/smart-tg-bot';
 const GH_API = `https://api.github.com/repos/${GH_REPO}`;
 
