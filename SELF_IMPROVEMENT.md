@@ -180,6 +180,11 @@ done
 - 2 разных типа storage: files + cloud
 - 1 offline: Telegram channel files (downloadable)
 
+### R16: META_PROMPT_QUICK_REF.md — быстрый доступ к правилам мета-промпта
+Полный мета-промпт = 1090 строк, 95KB. Читать каждый раз = дорого.
+Решение: `META_PROMPT_QUICK_REF.md` — выжимка всех правил (NL-1..NL-9, §III, §IV, §VI, §IX domain disclaimers, §XI Truth Gateway, §XII Idea Validator, §XV SOTA, §XVIII Safety, §XIX Auto-improvement, §XX Proactive Engine).
+Перед задачей: читать SELF_IMPROVEMENT.md + META_PROMPT_QUICK_REF.md (вместо 95KB полного мета-промпта).
+
 ---
 
 ## §3. АНТИ-ПАТТЕРНЫ (НИКОГДА не повторять)
