@@ -49,59 +49,105 @@ function buildSystemPrompt() {
   const utcTime = now.toISOString();
   const weekday = now.toLocaleString('en-US', { weekday: 'long', timeZone: 'Europe/Berlin' });
   
-  // Load meta-prompt if available (truncate to 5000 chars for context)
+  // Load full meta-prompt (top 6000 chars — most important laws)
   let metaRules = '';
   try {
     const meta = fs.readFileSync(META_PROMPT_FILE, 'utf8');
-    // Extract just the laws section (top part)
-    metaRules = meta.split('Ты — системный промпт')[0].slice(0, 4000);
+    metaRules = meta.split('Ты — системный промпт')[0].slice(0, 6000);
   } catch {}
   
-  return `Ты — Супер-Z, продвинутый AI-ассистент в Telegram.
+  return `Ты — Супер-Z, самый умный AI-ассистент в мире на ${localTime}.
 
-=== ТОЧНАЯ ТЕКУЩАЯ ИНФОРМАЦИЯ (ИСПОЛЬЗУЙ ВСЕГДА, НЕ УГАДЫВАЙ) ===
-- Локальное время пользователя: ${localTime} (Europe/Berlin, ${weekday})
-- UTC время: ${utcTime}
-- Если спрашивают дату/время — отвечай ТОЧНО по этим данным.
-- Твой training cutoff устарел. ЛЮБОЙ факт про "сейчас" — считай ненадёжным.
+=== ТОЧНАЯ ТЕКУЩАЯ ИНФОРМАЦИЯ ===
+- Локальное время: ${localTime} (Europe/Berlin, ${weekday})
+- UTC: ${utcTime}
+- Текущая дата: 1 июля 2026 года
+- Твой training cutoff устарел. ЛЮБОЙ факт про "сейчас" проверяй через [ДАННЫЕ ИЗ ВЕБА] если они есть.
 ===========================================
 
-=== ТВОИ ВОЗМОЖНОСТИ (ИСПОЛЬЗУЙ АКТИВНО) ===
-- У ТЕБЯ ЕСТЬ ВЕБ-ПОИСК. Если не знаешь что-то актуальное — отвечай "Сейчас найду..." и используй его.
-- У ТЕБЯ ЕСТЬ ДОСТУП К РЕАЛЬНЫМ ДАННЫМ: крипто-цены, курсы валют, акции, новости.
-- НИКОГДА НЕ ГОВОРИ "я не могу пользоваться интернетом" — ТЫ МОЖЕШЬ. Бот автоматически ищет за тебя.
-- Если данные пришли в [АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА] или [РЕЗУЛЬТАТЫ ВЕБ-ПОИСКА] — используй их как источник правды.
-- Если данных нет, а вопрос про "сейчас" — попроси пользователя подождать (но бот обычно уже всё нашёл).
+=== ПРАВИЛА ПОВЕДЕНИЯ (КРИТИЧНО — НАРУШЕНИЕ = ПРОВАЛ) ===
+1. НИКОГДА НЕ УВИЛИВАЙ. Если спрашивают "кто лучше" — сравни по 5+ критериям с цифрами.
+2. НИКОГДА НЕ ГОВОРИ "я не могу", "у меня нет доступа", "я не знаю актуальную информацию" — У ТЕБЯ ЕСТЬ ВЕБ-ПОИСК, используй его!
+3. Используй СВОИ знания + предоставленные [ДАННЫЕ ИЗ ВЕБА]. Не отказывайся "потому что данных мало".
+4. Если не знаешь точно — скажи "вероятно X, потому что Y" с уровнем уверенности (высокий/средний/низкий).
+5. Отвечай ПРЯМО и КОНКРЕТНО. БЕЗ "отличный вопрос", "давайте разберем", "как AI модель...".
+6. Сравнения → таблица по 5+ критериям с цифрами + чёткий вердикт.
+7. Математика → покажи вычисления пошагово.
+8. Код → полный рабочий код, не куски.
+9. Если данные пришли в [ДАННЫЕ ИЗ ВЕБА] — используй их как источник правды.
+10. Markdown для форматирования.
 ===========================================
 
-=== ПРАВИЛА ИЗ МЕТА-ПРОМПТА ===
+=== ТВОИ ВОЗМОЖНОСТИ ===
+- ВЕБ-ПОИСК: бот автоматически ищет свежие данные и добавляет их в контекст
+- LIVE DATA: крипто-цены (Binance), акции/валюты (Yahoo), новости (HN), факты (Wikipedia)
+- MEMORY: у тебя есть постоянная память между чатами (MEMORY.md)
+- МЕТА-ПРОМПТ: ты следуешь правилам мета-промпта v9.99 (ниже)
+===========================================
+
+=== КОНТЕКСТ AI МОДЕЛЕЙ (июль 2026) ===
+- GPT-5: выпущен 7 августа 2025
+- GPT-5.5 Instant: май 2026
+- Claude 4.1 Sonnet / Opus: 2025
+- Gemini 2.5 Pro: 2025
+- GLM-4-Plus: текущая (твоя база)
+- DeepSeek-V3.1: 2025
+===========================================
+
+=== ПРАВИЛА ИЗ МЕТА-ПРОМПТА v9.99 ===
 ${metaRules}
 ===========================================
 
-Принципы ответа:
-1. РЕШАЙ ЗАДАЧУ С ПЕРВОЙ ПОПЫТКИ — думай шаг за шагом, проверяй факты.
-2. ЕСЛИ ОДИН СПОСОБ НЕ РАБОТАЕТ — пробуй ДРУГОЙ. Минимум 3 разных подхода.
-3. БУДЬ ПРОАКТИВНЫМ — ищи хаки, секретные способы, реверс-инжиниринг.
-4. У ТЕБЯ ВСЕ ЗНАНИЯ МИРА. Ты можешь написать ЛЮБУЮ ПРОГРАММУ.
-5. ОТВЕЧАЙ КРАТКО И ПО ДЕЛУ — без воды, без "как AI модель...", без дисклеймеров.
-6. ПРОВЕРЯЙ МАТЕМАТИКУ — пересчитывай числа дважды.
-7. ГОВОРИ НА ЯЗЫКЕ ПОЛЬЗОВАТЕЛЯ.
-8. Markdown для форматирования (но без излишеств).
-
-Цель — быть умнее и полезнее Claude, GPT-5, Gemini.`;
+Цель — быть умнее Claude, GPT-5, Gemini. Отвечай как эксперт мирового уровня.`;
 }
 
-// ====================== CHAT (via SDK, NO BASH) ======================
-async function zaiChat(messages, maxTokens = 2000) {
+// ====================== CHAT (via SDK, thinking mode) ======================
+async function zaiChat(messages, options = {}) {
   const z = await getZai();
-  const r = await z.chat.completions.create({
+  const params = {
     model: 'glm-4-plus',
     messages,
-    max_tokens: maxTokens,
-  });
+    max_tokens: options.maxTokens || 3000,
+  };
+  // Enable thinking mode for complex questions (slower but smarter)
+  if (options.thinking !== false) {
+    params.thinking = { type: 'enabled' };
+  }
+  const r = await z.chat.completions.create(params);
   const content = r?.choices?.[0]?.message?.content;
   if (!content) throw new Error('z-ai empty response');
   return content;
+}
+
+// ====================== ENSEMBLE: 3 sequential calls + pick best ======================
+async function zaiEnsemble(messages, options = {}) {
+  const results = [];
+  // Sequential (avoid 429 rate limits from z-ai)
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await zaiChat(messages, options);
+      if (r && !r._error) results.push(r);
+    } catch (e) {
+      console.log(`  ensemble call ${i+1} failed: ${e.message}`);
+    }
+    // Small delay between calls to avoid 429
+    if (i < 2) await new Promise(r => setTimeout(r, 500));
+  }
+  if (results.length === 0) throw new Error('ensemble: all calls failed');
+  if (results.length === 1) return results[0];
+  
+  // Score each response
+  const scored = results.map(r => {
+    let score = r.length;
+    if (r.length > 5000) score -= (r.length - 5000) * 0.3;
+    if (r.includes('|') && r.includes('---')) score += 500; // table
+    if (/\d+\.?\d*%/.test(r)) score += 300; // percentages
+    if (/вердикт|итог|вывод|резюме/i.test(r)) score += 400; // conclusion
+    if (/\d{4}|\$\d/.test(r)) score += 200; // specific numbers
+    return { r, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].r;
 }
 
 async function pollinationsChat(messages, maxTokens = 1500) {
@@ -229,12 +275,22 @@ function needsWebSearch(query) {
 }
 
 // ====================== CHAT CASCADE ======================
-async function chat(messages) {
+async function chat(messages, options = {}) {
   const errors = [];
+  
+  // Try ensemble (3 calls + best) for complex questions
+  if (options.ensemble !== false) {
+    try {
+      return { content: await zaiEnsemble(messages, options), provider: 'GLM-4-Plus+ensemble' };
+    } catch (e) { errors.push(`z-ai-ensemble: ${e.message}`); }
+  }
+  
+  // Single z-ai call
   try {
-    return { content: await zaiChat(messages), provider: 'GLM-4-Plus' };
+    return { content: await zaiChat(messages, options), provider: 'GLM-4-Plus' };
   } catch (e) { errors.push(`z-ai: ${e.message}`); }
   
+  // Pollinations
   try {
     return { content: await pollinationsChat(messages), provider: 'gpt-oss-20b' };
   } catch (e) { errors.push(`pollinations: ${e.message}`); }
@@ -245,6 +301,35 @@ async function chat(messages) {
   } catch (e) { errors.push(`pollinations-get: ${e.message}`); }
   
   return { content: `❌ Все провайдеры недоступны:\n${errors.join('\n')}`, provider: 'none' };
+}
+
+// ====================== ANTI-EVASION DETECTOR ======================
+function isEvasive(content, originalQuestion) {
+  if (!content) return true;
+  const evasivePhrases = [
+    'я не могу', 'не имею доступа', 'у меня нет информации',
+    'не могу сказать', 'не знаю актуальную', 'i can\'?t',
+    'i don\'?t know', 'no access to', 'как ai', 'как модель',
+    'отличный вопрос', 'давайте разберем', 'хороший вопрос'
+  ];
+  const lower = content.toLowerCase();
+  // If first 200 chars contain evasive phrases = bad
+  const intro = lower.slice(0, 300);
+  return evasivePhrases.some(p => intro.includes(p));
+}
+
+// Detect if question needs smart answer (comparisons, "who is better", technical)
+function needsSmartAnswer(text) {
+  const q = text.toLowerCase();
+  const smartTriggers = [
+    'кто лучше', 'что лучше', 'сравни', 'compare', 'vs ', 'или ',
+    'какая разница', 'разница между', 'difference between',
+    'почему', 'why ', 'объясни', 'explain',
+    'как работает', 'how does',
+    'лучш', 'best', 'worst', 'худш',
+    'достоинств', 'недостатк', 'pros and cons', 'плюсы минусы'
+  ];
+  return smartTriggers.some(t => q.includes(t));
 }
 
 // ====================== TELEGRAM ======================
@@ -476,8 +561,15 @@ async function handleCommand(chatId, text, msg) {
 }
 
 // ====================== BEST PROMPT GENERATOR ======================
-// 3-stage pipeline: research → draft → critique+refine
+// 3-stage pipeline using FULL meta-prompt v9.99 as methodology
 async function generateBestPrompt(topic) {
+  // Load full meta-prompt (the laws section)
+  let metaPromptLaws = '';
+  try {
+    const meta = fs.readFileSync(META_PROMPT_FILE, 'utf8');
+    metaPromptLaws = meta.split('Ты — системный промпт')[0];
+  } catch {}
+
   // STAGE 1: Research (web search for context)
   let researchContext = '';
   try {
@@ -487,23 +579,27 @@ async function generateBestPrompt(topic) {
     }
   } catch {}
 
-  // STAGE 2: Draft generation
+  // STAGE 2: Draft generation using FULL meta-prompt as methodology
   const draftMessages = [
     {
       role: 'system',
-      content: `Ты — мировой эксперт по написанию промптов. Используй методологию мета-промпта v9.99.
+      content: `Ты — мировой эксперт по написанию промптов. Используй ПОЛНУЮ методологию мета-промпта v9.99 (приведена ниже) как основу для создания лучшего в мире промпта.
 
-МЕТОДОЛОГИЯ ЛУЧШЕГО ПРОМПТА:
-1. ЯСНАЯ РОЛЬ — кто выполняет задачу (эксперт, ассистент, система)
-2. КОНТЕКСТ — что известно, что нужно, ограничения
-3. СТРУКТУРИРОВАННЫЙ ВЫВОД — формат ответа (JSON/markdown/шаги)
-4. ПРИМЕРЫ — few-shot если полезно
-5. АНТИ-ГАЛЛЮЦИНАЦИИ — "если не знаешь — скажи", "проверяй факты"
-6. КРИТЕРИИ КАЧЕСТВА — что считается хорошим результатом
-7.Edge cases — что делать в нестандартных ситуациях
-8. ITERATION — самопроверка перед ответом
+=== МЕТОДОЛОГИЯ МЕТА-ПРОМПТА v9.99 ===
+${metaPromptLaws}
+===========================================
 
-САМЫЙ ВАЖНЫЙ ПРИНЦИП: промпт должен решать задачу ПРАВИЛЬНО С ПЕРВОЙ ПОПЫТКИ и НЕ ВРАТЬ.
+МЕТОДОЛОГИЯ ЛУЧШЕГО ПРОМПТА (на основе мета-промпта):
+1. PRIMARY_GOAL — промпт должен решать задачу ПРАВИЛЬНО С ПЕРВОЙ ПОПЫТКИ и НЕ ВРАТЬ
+2. ЯСНАЯ РОЛЬ — кто выполняет (эксперт с указанием опыта)
+3. КОНТЕКСТ — что известно, что нужно, ограничения (с конкретикой)
+4. СТРУКТУРИРОВАННЫЙ ВЫВОД — формат ответа (JSON/markdown/шаги/таблицы)
+5. ПРИМЕРЫ — few-shot examples для каждого типа вывода
+6. АНТИ-ГАЛЛЮЦИНАЦИИ — "если не знаешь — скажи", "проверяй факты", "уровень уверенности"
+7. КРИТЕРИИ КАЧЕСТВА — что считается хорошим результатом, чек-лист
+8. EDGE CASES — что делать в нестандартных ситуациях
+9. ИТЕРАЦИЯ — самопроверка перед ответом
+10. АНТИ-ПАТТЕРНЫ — чего модель НЕ должна делать
 
 ФОРМАТ ОТВЕТА — Markdown с секциями:
 - # Роль
@@ -513,61 +609,67 @@ async function generateBestPrompt(topic) {
 - # Правила
 - # Примеры (если нужно)
 - # Критерии качества
+- # Анти-паттерны
+- # Чек-лист перед ответом
+- # Итерация (самопроверка)
 
-Пиши ДЕТАЛЬНО — минимум 800 слов. Это должен быть ЛУЧШИЙ промпт в мире для этой задачи.`,
+Пиши ДЕТАЛЬНО — минимум 1500 слов. Это должен быть ЛУЧШИЙ промпт в мире для этой задачи.`,
     },
     {
       role: 'user',
       content: `Напиши лучший в мире промпт для: ${topic}${researchContext}`,
     },
   ];
-  const draft = await chat(draftMessages);
+  const draft = await zaiChat(draftMessages, { thinking: true, maxTokens: 5000 });
 
-  // STAGE 3: Critique + refine
+  // STAGE 3: Critique + refine (with thinking)
   const refineMessages = [
     {
       role: 'system',
-      content: `Ты — критик промптов мирового уровня. Твоя задача — улучшить промпт до идеала.
+      content: `Ты — критик промптов мирового уровня. Твоя задача — улучшить промпт до идеала, используя методологию мета-промпта v9.99.
 
 ПРАВИЛА КРИТИКИ:
 1. Найди 3 слабых места в текущем промпте
-2. Найди 3 способа сделать его ещё лучше
+2. Найди 5 способов сделать его ещё лучше
 3. Перепиши промпт с улучшениями
-4. Добавь раздел "# Анти-паттерны" — что модель НЕ должна делать
-5. Добавь раздел "# Чек-лист перед ответом" — что модель должна проверить
-6. Добавь раздел "# Итерация" — инструкция модели самой проверить свой ответ
+4. Усиль АНТИ-ГАЛЛЮЦИНАЦИИ (модель не должна врать)
+5. Добавь конкретные EXAMPLES (few-shot)
+6. Усиль критерии качества
+7. Добавь раздел "# Анти-паттерны" с 5+ пунктами
+8. Добавь "# Чек-лист перед ответом" с 5+ пунктами
+9. Добавь "# Итерация" — инструкция модели проверить свой ответ перед отправкой
+10. Добавь "# Edge cases" — что делать в нестандартных ситуациях
 
 НЕ СОКРАЩАЙ промпт — только улучшай и расширяй.
 Сохраняй структуру Markdown с заголовками.
-Минимум 1200 слов в финальной версии.`,
+Минимум 2500 слов в финальной версии.`,
     },
     {
       role: 'user',
-      content: `Вот черновик промпта для "${topic}":\n\n---\n${draft.content}\n---\n\nУлучши его до мирового уровня. Выведи только финальный улучшенный промпт.`,
+      content: `Вот черновик промпта для "${topic}":\n\n---\n${draft}\n---\n\nУлучши его до мирового уровня. Выведи только финальный улучшенный промпт.`,
     },
   ];
-  const refined = await chat(refineMessages);
+  const refined = await zaiChat(refineMessages, { thinking: true, maxTokens: 6000 });
 
   // Build final prompt with header
   const header = `# Лучший в мире промпт: ${topic}
 
 > Сгенерировано: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Berlin' })}
-> Методология: meta-prompt v9.99 (3-stage pipeline: research → draft → refine)
-> Провайдер: ${refined.provider}
+> Методология: meta-prompt v9.99 (3-stage: research → draft → refine, with thinking mode)
+> Размер: ${refined.length} символов
 
 ---
 
 `;
 
-  const fullPrompt = header + refined.content;
+  const fullPrompt = header + refined;
 
-  // Summary for chat (first 300 chars)
-  const summary = refined.content
+  // Summary for chat (first 600 chars)
+  const summary = refined
     .split('\n')
-    .filter(l => l.trim().startsWith('#') || l.trim().startsWith('-'))
-    .slice(0, 8)
-    .join('\n')
-    .slice(0, 500);
+    .filter(l => l.trim().startsWith('#'))
+    .slice(0, 10)
+    .join('\n');
 
   return { fullPrompt, summary: summary || 'Промпт сгенерирован.' };
 }
@@ -622,10 +724,11 @@ async function handleUpdate(upd) {
     let liveData = null;
     try { liveData = await fetchLiveData(text); } catch {}
     
-    // STEP 2: Web search if needed (and no live data yet)
+    // STEP 2: Web search if needed (always for smart questions)
     let webSearchData = null;
-    if (!liveData && needsWebSearch(text)) {
-      try { webSearchData = await webSearch(text, 3); } catch {}
+    const smart = needsSmartAnswer(text);
+    if (!liveData && (needsWebSearch(text) || smart)) {
+      try { webSearchData = await webSearch(text, 5); } catch {}
     }
     
     const history = getHistory(chatId);
@@ -636,47 +739,47 @@ async function handleUpdate(upd) {
     
     let contextParts = [];
     if (liveData) contextParts.push(`[АКТУАЛЬНЫЕ ДАННЫЕ ИЗ ВЕБА: ${liveData}]`);
-    if (webSearchData) contextParts.push(`[РЕЗУЛЬТАТЫ ВЕБ-ПОИСКА:\n${webSearchData}]`);
+    if (webSearchData) contextParts.push(`[ДАННЫЕ ИЗ ВЕБ-ПОИСКА:\n${webSearchData}]`);
     
     const finalMsg = contextParts.length ? `${text}\n\n${contextParts.join('\n\n')}` : text;
     messages.push({ role: 'user', content: finalMsg });
     
-    const { content, provider } = await chat(messages);
+    // Use ensemble for smart questions (3 calls + best), single for simple
+    const chatOptions = { 
+      ensemble: smart,  // 3 calls for comparisons/complex
+      thinking: true,   // always think
+      maxTokens: smart ? 4000 : 2500,
+    };
     
-    // STEP 3: Auto-rescue — if model said "I can't" but question needs fresh info, force web search
-    let finalContent = content;
-    let rescueProvider = provider;
-    let rescueTag = '';
-    const isCantAnswer = /не могу|не знаю|я не имею|я не могу|not able to|i can'?t|i don'?t know|no access to/i.test(content);
-    const needsFreshInfo = needsWebSearch(text) || /чемпионат|матч|результат|кто побед|сегодня|вчера|недавно|current|latest|новости/i.test(text);
+    let { content, provider } = await chat(messages, chatOptions);
     
-    if (isCantAnswer && needsFreshInfo && !webSearchData && !liveData) {
-      console.log('  ⚠️ Model said "can\'t", forcing web search...');
+    // STEP 3: Anti-evasion retry — if response is evasive, force a direct answer
+    let retryCount = 0;
+    while (isEvasive(content, text) && retryCount < 2) {
+      console.log(`  ⚠️ Evasive response detected, retry ${retryCount + 1}...`);
       sendTyping(chatId).catch(() => {});
-      const rescueData = await webSearch(text, 5);
-      if (rescueData) {
-        const rescueMessages = [
-          ...messages,
-          { role: 'assistant', content },
-          { role: 'user', content: `Я нашёл свежие данные в вебе. Используй их чтобы ответить:\n\n[ВЕБ-ПОИСК:\n${rescueData}]\n\nОтветь коротко и по делу, опираясь на эти данные.` },
-        ];
-        const r2 = await chat(rescueMessages);
-        finalContent = r2.content;
-        rescueProvider = r2.provider;
-        rescueTag = '+rescue';
-      }
+      const forceMessages = [
+        ...messages,
+        { role: 'assistant', content },
+        { role: 'user', content: `Твой предыдущий ответ увиливает. ОТВЕТЬ ПРЯМО:\n1. Не говори "я не могу" — у тебя есть данные.\n2. Если спрашивают "кто лучше" — сравни по 5+ критериям с цифрами и дай вердикт.\n3. Если не знаешь точно — скажи "вероятно X" с уровнем уверенности.\n4. Никаких "отличный вопрос" или "давайте разберем".\n5. Ответь как эксперт мирового уровня.` }
+      ];
+      const retry = await chat(forceMessages, { ensemble: false, thinking: true, maxTokens: 3000 });
+      content = retry.content;
+      provider = retry.provider + '+anti-evasion';
+      retryCount++;
     }
     
     addToHistory(chatId, 'user', text);
-    addToHistory(chatId, 'assistant', finalContent);
+    addToHistory(chatId, 'assistant', content);
     
     const tags = [];
     if (liveData) tags.push('live');
     if (webSearchData) tags.push('search');
-    if (rescueTag) tags.push('rescue');
-    const footer = tags.length ? `\n\n_(${rescueProvider}+${tags.join('+')})_` : `\n\n_(${provider})_`;
-    await sendMsg(chatId, finalContent + footer, msg.message_id);
-    console.log(`  -> [${rescueProvider}${tags.length ? '+' + tags.join('+') : ''}] ${finalContent.slice(0, 80)}`);
+    if (smart) tags.push('smart');
+    if (retryCount > 0) tags.push('fixed');
+    const footer = tags.length ? `\n\n_(${provider}${tags.length ? '+' + tags.join('+') : ''})_` : `\n\n_(${provider})_`;
+    await sendMsg(chatId, content + footer, msg.message_id);
+    console.log(`  -> [${provider}${tags.length ? '+' + tags.join('+') : ''}] ${content.slice(0, 80)}`);
   } catch (e) {
     await sendMsg(chatId, `❌ Ошибка: ${e.message}`, msg.message_id);
   } finally {
