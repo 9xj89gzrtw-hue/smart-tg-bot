@@ -374,7 +374,9 @@ async function handleCommand(chatId, text, msg) {
     await reply(
       `*Супер-Z бот v2*\n\n` +
       `Умный ассистент с веб-доступом и памятью.\n\n` +
-      `*Команды:*\n` +
+      `*🧠 Генерация промптов:*\n` +
+      `/prompt <тема> — лучший в мире промпт по теме\n\n` +
+      `*📦 Команды:*\n` +
       `/help — это сообщение\n` +
       `/clear — очистить контекст\n` +
       `/model — текущий провайдер\n` +
@@ -384,7 +386,12 @@ async function handleCommand(chatId, text, msg) {
       `/backup — backup в Telegram-канал\n` +
       `/sync — backup в GitHub\n` +
       `/status — статус системы\n\n` +
-      `Просто напиши сообщение — отвечу с живыми данными.`
+      `*Примеры /prompt:*\n` +
+      `/prompt программирование крипто-бота\n` +
+      `/prompt написание продающего лендинга\n` +
+      `/prompt изучение испанского за 30 дней\n` +
+      `/prompt инвестиции в крипту для новичка\n\n` +
+      `Или просто напиши сообщение — отвечу с живыми данными.`
     );
   } else if (cmd === '/clear') {
     histories[chatId] = [];
@@ -439,9 +446,130 @@ async function handleCommand(chatId, text, msg) {
       `🔍 Web search: через SDK (без bash)\n` +
       `⚙️ Каскад: GLM-4-Plus → Pollinations POST → GET`
     );
+  } else if (cmd === '/prompt' || cmd === '/промпт') {
+    // /prompt <topic> — generate the best-in-the-world prompt for any topic
+    const topic = text.replace(/^\/(prompt|промпт)\s*/i, '').trim();
+    if (!topic) {
+      await reply('Использование: `/prompt <тема>`\n\nПримеры:\n`/prompt программирование крипто-торгового бота`\n`/prompt написание продающего лендинга`\n`/prompt изучение испанского за 30 дней`');
+      return;
+    }
+    await reply(`🧠 Генерирую лучший в мире промпт для:\n*${topic}*\n\n⏳ 3 этапа: research → draft → refine...`);
+    sendTyping(chatId).catch(() => {});
+    const typingIv = setInterval(() => sendTyping(chatId).catch(() => {}), 4000);
+    try {
+      const result = await generateBestPrompt(topic);
+      clearInterval(typingIv);
+      // Send short summary in chat
+      const summary = `✅ *Промпт готов!*\n\n${result.summary}\n\n📁 Полный промпт — в файле ниже.`;
+      await sendMsg(chatId, summary, msg.message_id);
+      // Send full prompt as file
+      const filename = `prompt_${topic.toLowerCase().replace(/[^a-zа-я0-9]+/gi, '_').slice(0, 30)}.md`;
+      await sendDocument(chatId, result.fullPrompt, filename, `🧠 Лучший промпт: ${topic}`);
+      console.log(`  -> /prompt ${topic.slice(0, 50)}: generated ${result.fullPrompt.length} chars`);
+    } catch (e) {
+      clearInterval(typingIv);
+      await reply(`❌ Ошибка генерации: ${e.message}`);
+    }
   } else {
     await reply('Неизвестная команда. /help — список.');
   }
+}
+
+// ====================== BEST PROMPT GENERATOR ======================
+// 3-stage pipeline: research → draft → critique+refine
+async function generateBestPrompt(topic) {
+  // STAGE 1: Research (web search for context)
+  let researchContext = '';
+  try {
+    const wsResults = await webSearch(`best practices for: ${topic}`, 5);
+    if (wsResults) {
+      researchContext = `\n\n[КОНТЕКСТ ИЗ ВЕБА (используй для точности):\n${wsResults}]`;
+    }
+  } catch {}
+
+  // STAGE 2: Draft generation
+  const draftMessages = [
+    {
+      role: 'system',
+      content: `Ты — мировой эксперт по написанию промптов. Используй методологию мета-промпта v9.99.
+
+МЕТОДОЛОГИЯ ЛУЧШЕГО ПРОМПТА:
+1. ЯСНАЯ РОЛЬ — кто выполняет задачу (эксперт, ассистент, система)
+2. КОНТЕКСТ — что известно, что нужно, ограничения
+3. СТРУКТУРИРОВАННЫЙ ВЫВОД — формат ответа (JSON/markdown/шаги)
+4. ПРИМЕРЫ — few-shot если полезно
+5. АНТИ-ГАЛЛЮЦИНАЦИИ — "если не знаешь — скажи", "проверяй факты"
+6. КРИТЕРИИ КАЧЕСТВА — что считается хорошим результатом
+7.Edge cases — что делать в нестандартных ситуациях
+8. ITERATION — самопроверка перед ответом
+
+САМЫЙ ВАЖНЫЙ ПРИНЦИП: промпт должен решать задачу ПРАВИЛЬНО С ПЕРВОЙ ПОПЫТКИ и НЕ ВРАТЬ.
+
+ФОРМАТ ОТВЕТА — Markdown с секциями:
+- # Роль
+- # Контекст
+- # Задача
+- # Формат вывода
+- # Правила
+- # Примеры (если нужно)
+- # Критерии качества
+
+Пиши ДЕТАЛЬНО — минимум 800 слов. Это должен быть ЛУЧШИЙ промпт в мире для этой задачи.`,
+    },
+    {
+      role: 'user',
+      content: `Напиши лучший в мире промпт для: ${topic}${researchContext}`,
+    },
+  ];
+  const draft = await chat(draftMessages);
+
+  // STAGE 3: Critique + refine
+  const refineMessages = [
+    {
+      role: 'system',
+      content: `Ты — критик промптов мирового уровня. Твоя задача — улучшить промпт до идеала.
+
+ПРАВИЛА КРИТИКИ:
+1. Найди 3 слабых места в текущем промпте
+2. Найди 3 способа сделать его ещё лучше
+3. Перепиши промпт с улучшениями
+4. Добавь раздел "# Анти-паттерны" — что модель НЕ должна делать
+5. Добавь раздел "# Чек-лист перед ответом" — что модель должна проверить
+6. Добавь раздел "# Итерация" — инструкция модели самой проверить свой ответ
+
+НЕ СОКРАЩАЙ промпт — только улучшай и расширяй.
+Сохраняй структуру Markdown с заголовками.
+Минимум 1200 слов в финальной версии.`,
+    },
+    {
+      role: 'user',
+      content: `Вот черновик промпта для "${topic}":\n\n---\n${draft.content}\n---\n\nУлучши его до мирового уровня. Выведи только финальный улучшенный промпт.`,
+    },
+  ];
+  const refined = await chat(refineMessages);
+
+  // Build final prompt with header
+  const header = `# Лучший в мире промпт: ${topic}
+
+> Сгенерировано: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Berlin' })}
+> Методология: meta-prompt v9.99 (3-stage pipeline: research → draft → refine)
+> Провайдер: ${refined.provider}
+
+---
+
+`;
+
+  const fullPrompt = header + refined.content;
+
+  // Summary for chat (first 300 chars)
+  const summary = refined.content
+    .split('\n')
+    .filter(l => l.trim().startsWith('#') || l.trim().startsWith('-'))
+    .slice(0, 8)
+    .join('\n')
+    .slice(0, 500);
+
+  return { fullPrompt, summary: summary || 'Промпт сгенерирован.' };
 }
 
 // ====================== MAIN LOOP ======================
@@ -568,6 +696,7 @@ await fetch(`https://api.telegram.org/bot${TG_TOKEN}/deleteWebhook?drop_pending_
 await tg('setMyCommands', {
   commands: [
     { command: 'help', description: 'Помощь' },
+    { command: 'prompt', description: '🧠 Лучший промпт по теме' },
     { command: 'clear', description: 'Очистить контекст' },
     { command: 'model', description: 'Провайдер' },
     { command: 'meta', description: 'Показать мета-промпт' },
