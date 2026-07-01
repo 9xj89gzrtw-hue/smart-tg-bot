@@ -71,12 +71,40 @@
 - **function**: works for any registered function in SDK
 - **thinking mode**: `z-ai chat -p "..." -t` (enabled thinking chain)
 
+### z-ai SDK as Node module (NO BASH needed!) — v2 architecture
+```javascript
+import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
+const z = await (ZAI.default || ZAI).create();
+// Methods: config, chat, audio, images, video, async, functions
+
+// Chat (GLM-4-Plus)
+const r = await z.chat.completions.create({
+  model: 'glm-4-plus',
+  messages: [{role:'user', content:'hello'}],
+  max_tokens: 200,
+});
+
+// Web search
+const results = await z.functions.invoke('web_search', { query: 'X', num: 3 });
+// Returns: [{url, name, snippet, host_name, rank, date, favicon}, ...]
+```
+- **Преимущество**: в 5x быстрее чем bash (нет процесса spawn)
+- **Не зависит от bash/shell** — можно запускать где угодно где есть Node
+- **Готово к serverless**: можно деплоить на Vercel/Cloudflare Workers
+
+### GitHub auto-push (backup)
+- **Repo**: `9xj89gzrtw-hue/smart-tg-bot` (PRIVATE)
+- **Token**: `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`
+- **API**: `PUT /repos/{owner}/{repo}/contents/{path}` с `content: base64` и `sha` (если файл существует)
+- **Команда в боте**: `/sync` — пушит все файлы
+- **Что пушится**: smart_bot_v2.mjs, MEMORY.md, meta-prompt, restore.sh, deploy_vercel/
+
 ### Backup-канал Telegram
 - **Chat ID**: `-1003609243674`
 - **Название**: "Super memory"
 - **Пригласительная ссылка**: `https://t.me/+afib9ZuFyS8wOTA6`
 - **Бот**: добавлен как администратор
-- **Команда**: `/backup` в бота → отправляет MEMORY.md как файл в канал
+- **Команда**: `/backup` в бота → отправляет MEMORY.md + meta-prompt как файлы в канал
 - **Авто-детект**: бот сам находит chat_id при добавлении в канал или при пересылке поста
 
 ### Бесплатные AI-провайдеры (без API-ключа)
