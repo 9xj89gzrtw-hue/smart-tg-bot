@@ -58,7 +58,34 @@
 - **Внешний доступ**: НЕ работает снаружи песочницы (403 Forbidden)
 - **Решение**: используем `z-ai` CLI (SDK корректно добавляет все headers)
 
-### z-ai CLI hidden capabilities (NEED TO REMEMBER!)
+### Самосовершенствование (Self-Improvement Loop)
+- **Скрипт**: `/home/z/my-project/scripts/self_improve.mjs`
+- **Бенчмарк**: 20 вопросов (math, current, compare, code, reasoning, antievad, fact)
+- **Verifier**: мультиязычный, с retry на 429
+- **Лог**: `/home/z/my-project/scripts/self_improvement_log.json` (последние 20 запусков)
+- **Improvements**: `/home/z/my-project/scripts/improvements.json`
+
+**Результаты бенчмарков:**
+- Run 1 (v1): 84.2% — baseline
+- Run 2 (v2 с Direct Answer First): бот стал отвечать прямее, но уперся в 429 на 8 вопросах
+
+**Reverse-engineered patterns from Claude 4.1 / GPT-5:**
+1. **Direct Answer First** — первая строка = прямой ответ (не "давайте разберем")
+2. **Chain-of-Thought** — краткое объяснение после ответа
+3. **Self-Reflection** — проверка своего ответа перед отправкой
+4. **ReAct** — используй инструменты (веб, калькулятор) когда нужны данные
+5. **Constitutional AI** — проверка против принципов (не врать, не увиливать)
+6. **Self-Consistency** — несколько вызовов + majority vote для математики
+7. **Decomposition** — сложную задачу разбей на под-вопросы
+
+**Anti-patterns (найдены и исправлены):**
+- "Отличный вопрос" / "Давайте разберем" → удалять
+- "Я не могу" / "У меня нет доступа" → заменять на "вероятно X, потому что Y"
+- Ответ 2023/2024 годом → переписывать с реальной датой
+- Сравнение без таблицы → добавлять таблицу
+- Verbose intro без прямого ответа → первая строка должна быть ответом
+
+### z-ai SDK скрытые возможности (NEED TO REMEMBER!)
 - **chat**: `z-ai chat -p "..." -s "system" -o out.json` (GLM-4-Plus, 0.5s)
 - **vision**: `z-ai vision -p "describe" -i image.jpg` (multimodal image understanding)
 - **tts**: `z-ai tts` (text-to-speech)
