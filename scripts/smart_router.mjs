@@ -10,10 +10,10 @@ import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
 import fs from 'node:fs';
-import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
+import ZAI from 'z-ai-web-dev-sdk';
 
 // ====================== CACHE (LRU) ======================
-const CACHE_FILE = '/home/z/my-project/scripts/cache.json';
+const CACHE_FILE = process.env.CACHE_FILE || (process.cwd() + '/scripts/cache.json');
 const CACHE_SIZE = 200;
 
 let cache = {};
