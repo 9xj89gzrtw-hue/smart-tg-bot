@@ -199,3 +199,41 @@ token = store.get("HF_TOKEN")  # или любой другой
 5. Render auto-deploy подхватит
 
 **КРИТИЧНО**: этот файл должен быть в Git, в Docker image, и загружаться ПЕРВЫМ в каждой сессии.
+
+## 📊 ФИНАЛЬНОЕ СОСТОЯНИЕ (2026-07-02 end of session)
+
+### РАБОЧИЙ BOT:
+- **Render v950-bot**: https://v950-bot.onrender.com (WEBHOOK mode, verified working)
+- **Telegram webhook**: https://v950-bot.onrender.com/webhook
+- **AI**: mega cascade (z-ai → GPT-4o-mini → GPT-4o → Llama-405B → Groq → OpenRouter → Pollinations)
+- **Last verified provider**: GPT-4o-mini+GH
+- **Conversation history**: 20 messages
+- **Web search**: Wikipedia (proper UA) + DuckDuckGo + z-ai SDK
+
+### ОТКЛЮЧЕНО:
+- smart-tg-bot GH Actions bot-runner.yml: DISABLED (409 conflicts, no webhook support)
+- Render v950-bot polling mode: DISABLED (409 conflicts)
+- HF Space bot: HOST_ROLE=secondary (not polling)
+
+### ПРАВИЛА ДЛЯ МЕНЯ (R42-R48):
+- R42: Проверить existing solutions перед предложением
+- R43: НЕ говорить "работает" без end-to-end verification
+- R44: Один TG_TOKEN = один active bot
+- R45: ДЕЛАЙ сразу, не спрашивай
+- R46: Proactive alternatives
+- R47: ВСЕГДА commit в GitHub после каждого change
+- R48: Если просишь пользователя — только самые легкие шаги со ссылками
+
+### ЧТО НЕ ДЕЛАТЬ:
+- ❌ НЕ запускать GH Actions bot (нет webhook, 409 conflicts)
+- ❌ НЕ использовать polling mode (409 conflicts)
+- ❌ НЕ предлагать Oracle Cloud (блокирует РФ)
+- ❌ НЕ говорить "работает" без POST + verify
+- ❌ НЕ спрашивать разрешение если есть токены
+
+### ССЫЛКИ:
+- Bot: @MyGlm52_bot
+- Debug: https://v950-bot.onrender.com/debug
+- Meta: https://v950-bot.onrender.com/meta
+- Codespace: https://super-z-autonomous-xrwp9j95w6wxcvq57.github.dev
+- GitHub: https://github.com/9xj89gzrtw-hue/v950-bot
