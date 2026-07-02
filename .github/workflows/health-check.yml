@@ -1,0 +1,41 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'  # every 30 min
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    
+    steps:
+      - name: Check bot is alive
+        run: |
+          # Check if any bot-runner workflow is in_progress
+          ACTIVE=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/9xj89gzrtw-hue/smart-tg-bot/actions/workflows/bot-runner.yml/runs?status=in_progress&per_page=5" \
+            | jq '.total_count')
+          
+          echo "Active bot runs: $ACTIVE"
+          
+          if [ "$ACTIVE" -eq 0 ]; then
+            echo "⚠️ No active bot run! Triggering new one..."
+            curl -s -X POST \
+              "https://api.github.com/repos/9xj89gzrtw-hue/smart-tg-bot/actions/workflows/bot-runner.yml/dispatches" \
+              -H "Authorization: token $GH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"ref":"main"}'
+            echo "✓ New run triggered"
+            
+            # Notify user
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -H "Content-Type: application/json" \
+              -d '{"chat_id": 396449039, "text": "⚠️ Бот был внизу! Auto-recovery: новый run запущен."}'
+          else
+            echo "✓ Bot is running ($ACTIVE active runs)"
+          fi
