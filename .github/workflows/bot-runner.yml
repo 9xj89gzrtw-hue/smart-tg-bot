@@ -39,7 +39,7 @@ jobs:
       
       - name: Start Bot v4
         if: steps.check.outputs.skip != 'true'
-        run: timeout 280m node scripts/gh_actions_bot_v4.mjs || true
+        run: timeout 280m node scripts/gh_actions_bot_v5.mjs || true
       
       - name: Trigger next run
         if: always() && steps.check.outputs.skip != 'true'
