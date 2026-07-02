@@ -1,62 +1,65 @@
-name: Auto-Deploy to HF Space
+name: Auto-Deploy & Sync
 
 on:
   push:
     branches: [main]
     paths:
-      - 'MEMORY.md'
       - 'SELF_IMPROVEMENT.md'
-      - 'META_PROMPT_QUICK_REF.md'
-      - 'CONVERSATION_LOG.md'
-      - 'EARLIER_SESSIONS.md'
+      - 'MEMORY.md'
+      - 'CRITICAL_RULES.md'
+      - 'CHANGELOG.md'
+      - 'TEMPLATES.md'
       - 'TECHNICAL_DISCOVERIES.md'
       - 'FAILED_ATTEMPTS.md'
+      - 'CONVERSATION_LOG.md'
+      - 'META_PROMPT_QUICK_REF.md'
   workflow_dispatch:
 
 jobs:
-  deploy:
+  sync:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       
-      - name: Sync memory files to HuggingFace Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - name: Sync all memory files to HF Space
         run: |
-          # Only sync MEMORY files — NOT smart_bot_v3.mjs, Dockerfile, README.md, start.sh
-          # Those have HF-specific versions that must not be overwritten
           FILES=(
-            "MEMORY.md"
             "SELF_IMPROVEMENT.md"
-            "META_PROMPT_QUICK_REF.md"
-            "CONVERSATION_LOG.md"
-            "EARLIER_SESSIONS.md"
+            "MEMORY.md"
+            "CRITICAL_RULES.md"
+            "CHANGELOG.md"
+            "TEMPLATES.md"
             "TECHNICAL_DISCOVERIES.md"
             "FAILED_ATTEMPTS.md"
+            "CONVERSATION_LOG.md"
+            "META_PROMPT_QUICK_REF.md"
           )
-          
-          for file in "${FILES[@]}"; do
-            if [ -f "$file" ]; then
-              CONTENT=$(base64 -w 0 "$file")
-              echo "Pushing $file..."
-              
-              PAYLOAD=$(jq -n \
-                --arg summary "Auto-sync $file from GitHub" \
-                --arg path "$file" \
-                --arg content "$CONTENT" \
-                '{summary: $summary, files: [{path: $path, content: $content, encoding: "base64"}]}')
-              
-              RESULT=$(curl -s -X POST "https://huggingface.co/api/spaces/danilaonly/smart-tg-bot/commit/main" \
+          for f in "${FILES[@]}"; do
+            if [ -f "$f" ]; then
+              CONTENT=$(base64 -w 0 "$f")
+              PAYLOAD=$(jq -n --arg s "Auto-sync $f" --arg p "$f" --arg c "$CONTENT" \
+                '{summary: $s, files: [{path: $p, content: $c, encoding: "base64"}]}')
+              curl -s -X POST "https://huggingface.co/api/spaces/danilaonly/smart-tg-bot/commit/main" \
                 -H "Authorization: Bearer $HF_TOKEN" \
                 -H "Content-Type: application/json" \
-                -d "$PAYLOAD")
-              echo "  $file: $(echo $RESULT | jq -r '.commitOid // .error // "failed"')"
+                -d "$PAYLOAD" > /dev/null
+              echo "  ✓ $f synced to HF"
             fi
           done
-          
-          echo "✅ Memory sync complete (bot code NOT touched)"
+      
+      - name: Backup to Telegram channel
+        run: |
+          for f in SELF_IMPROVEMENT.md MEMORY.md CRITICAL_RULES.md CHANGELOG.md; do
+            if [ -f "$f" ]; then
+              curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendDocument" \
+                -F "chat_id=-1003609243674" \
+                -F "document=@$f" \
+                -F "caption=$f — auto-sync $(date -u +'%Y-%m-%d %H:%M')" > /dev/null
+              echo "  ✓ $f backed up to Telegram"
+            fi
+          done
