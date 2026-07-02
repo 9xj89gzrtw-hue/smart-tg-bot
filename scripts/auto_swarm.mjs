@@ -29,7 +29,7 @@ import fs from 'node:fs';
 
 // Load .env
 try {
-  const envContent = fs.readFileSync('/home/z/my-project/.env', 'utf8');
+  const envContent = fs.readFileSync((process.cwd() + '/.env'), 'utf8');
   for (const line of envContent.split('\n')) {
     const m = line.match(/^([A-Z_]+)=(.*)$/);
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
@@ -71,7 +71,7 @@ let _solveWithSwarm = null;
 let _callWithRotation = null;
 async function getSwarmFn() {
   if (!_solveWithSwarm) {
-    const m = await import('/home/z/my-project/scripts/agent_swarm.mjs');
+    const m = await import((process.cwd() + '/scripts/agent_swarm.mjs'));
     _solveWithSwarm = m.solveWithSwarm;
     _callWithRotation = m.callWithRotation;
   }
@@ -134,7 +134,7 @@ export async function autoSwarm(question, history = []) {
 // ====================== BACKGROUND TASK QUEUE ======================
 // Long-running tasks (large swarms) run in background, notify user when done
 
-const QUEUE_FILE = '/home/z/my-project/scripts/task_queue.json';
+const QUEUE_FILE = (process.cwd() + '/scripts/task_queue.json');
 let taskQueue = [];
 try { taskQueue = JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf8')); } catch {}
 
@@ -214,7 +214,7 @@ export async function selfDiagnostic() {
   checks.push({ name: 'Bot process', ok: typeof process !== 'undefined', detail: `PID ${process.pid}` });
   
   // Check 2: .env file
-  const envExists = fs.existsSync('/home/z/my-project/.env');
+  const envExists = fs.existsSync((process.cwd() + '/.env'));
   checks.push({ name: '.env file', ok: envExists, detail: envExists ? 'exists' : 'MISSING' });
   
   // Check 3: GH tokens
@@ -222,25 +222,25 @@ export async function selfDiagnostic() {
   checks.push({ name: 'GH tokens', ok: ghTokens.length > 0, detail: `${ghTokens.length} tokens` });
   
   // Check 4: MEMORY.md
-  const memExists = fs.existsSync('/home/z/my-project/MEMORY.md');
+  const memExists = fs.existsSync((process.cwd() + '/MEMORY.md'));
   checks.push({ name: 'MEMORY.md', ok: memExists });
   
   // Check 5: Meta-prompt
-  const metaExists = fs.existsSync('/home/z/my-project/repo/meta-prompt-v9.99-FINAL.md');
+  const metaExists = fs.existsSync((process.cwd() + '/repo/meta-prompt-v9.99-FINAL.md'));
   checks.push({ name: 'Meta-prompt', ok: metaExists });
   
   // Check 6: Backup channel
   let backupChannel = null;
-  try { backupChannel = fs.readFileSync('/home/z/my-project/scripts/backup_channel.txt', 'utf8').trim(); } catch {}
+  try { backupChannel = fs.readFileSync((process.cwd() + '/scripts/backup_channel.txt'), 'utf8').trim(); } catch {}
   checks.push({ name: 'Backup channel', ok: !!backupChannel, detail: backupChannel || 'not set' });
   
   // Check 7: Agent swarm
-  const swarmExists = fs.existsSync('/home/z/my-project/scripts/agent_swarm.mjs');
+  const swarmExists = fs.existsSync((process.cwd() + '/scripts/agent_swarm.mjs'));
   checks.push({ name: 'Agent swarm', ok: swarmExists });
   
   // Check 8: Cache
   let cacheSize = 0;
-  try { cacheSize = Object.keys(JSON.parse(fs.readFileSync('/home/z/my-project/scripts/cache.json', 'utf8'))).length; } catch {}
+  try { cacheSize = Object.keys(JSON.parse(fs.readFileSync((process.cwd() + '/scripts/cache.json'), 'utf8'))).length; } catch {}
   checks.push({ name: 'Cache', ok: cacheSize > 0, detail: `${cacheSize} entries` });
   
   // Check 9: Test GH Models connectivity
