@@ -1,0 +1,25 @@
+name: Auto Revision
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+jobs:
+  revise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      TG_TOKEN: ${{ secrets.TG_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check bot running
+        run: |
+          ACTIVE=$(curl -s -H "Authorization: token $GH_TOKEN" \
+            "https://api.github.com/repos/9xj89gzrtw-hue/smart-tg-bot/actions/workflows/bot-runner.yml/runs?status=in_progress&per_page=5" \
+            | jq '.total_count')
+          if [ "$ACTIVE" -eq 0 ]; then
+            curl -s -X POST "https://api.github.com/repos/9xj89gzrtw-hue/smart-tg-bot/actions/workflows/bot-runner.yml/dispatches" \
+              -H "Authorization: token $GH_TOKEN" -H "Content-Type: application/json" -d '{"ref":"main"}'
+            curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage" \
+              -H "Content-Type: application/json" -d '{"chat_id": 396449039, "text": "⚠️ Weekly: bot was down, restarted."}'
+          fi
