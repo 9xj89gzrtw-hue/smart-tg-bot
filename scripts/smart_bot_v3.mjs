@@ -20,14 +20,14 @@ import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
 import fs from 'node:fs';
-import ZAI from '/home/z/.bun/install/global/node_modules/z-ai-web-dev-sdk/dist/index.js';
+import ZAI from 'z-ai-web-dev-sdk';
 import { smartChat as routerSmartChat } from './smart_router.mjs';
 import { solveWithSwarm, massProcess, GH_TOKENS, tokenState } from './agent_swarm.mjs';
 import { autoSwarm, queueBackgroundTask, getQueueStatus, selfDiagnostic } from './auto_swarm.mjs';
 
 // Load .env file (if exists) — keeps secrets out of source code
 try {
-  const envContent = fs.readFileSync('/home/z/my-project/.env', 'utf8');
+  const envContent = fs.readFileSync(process.env.ENV_FILE || (process.cwd() + '/.env'), 'utf8');
   for (const line of envContent.split('\n')) {
     const m = line.match(/^([A-Z_]+)=(.*)$/);
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
@@ -37,10 +37,10 @@ try {
 // ====================== CONFIG ======================
 const TG_TOKEN = process.env.TG_TOKEN || '8736969974:AAG66M9I0uGwRUksTt1iJt7v-n-f7T7BpnE';
 const ALLOWED_CHATS = new Set((process.env.ALLOWED_CHATS || '396449039').split(','));
-const HISTORY_FILE = '/home/z/my-project/scripts/bot_history.json';
-const MEMORY_FILE = '/home/z/my-project/MEMORY.md';
-const META_PROMPT_FILE = '/home/z/my-project/repo/meta-prompt-v9.99-FINAL.md';
-const BACKUP_CHANNEL_FILE = '/home/z/my-project/scripts/backup_channel.txt';
+const HISTORY_FILE = process.env.HISTORY_FILE || (process.cwd() + '/scripts/bot_history.json');
+const MEMORY_FILE = process.env.MEMORY_FILE || (process.cwd() + '/MEMORY.md');
+const META_PROMPT_FILE = process.env.META_PROMPT_FILE || (process.cwd() + '/meta-prompt-v9.99-FINAL.md');
+const BACKUP_CHANNEL_FILE = process.env.BACKUP_CHANNEL_FILE || (process.cwd() + '/scripts/backup_channel.txt');
 const BACKUP_CHANNEL_ID = (() => { try { return fs.readFileSync(BACKUP_CHANNEL_FILE, 'utf8').trim(); } catch { return null; } })();
 
 const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
