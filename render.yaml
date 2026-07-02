@@ -7,7 +7,7 @@ services:
     region: frankfurt
     branch: main
     rootDir: .
-    buildCommand: npm install
+    buildCommand: npm install && node --version
     startCommand: node scripts/smart_bot_v3.mjs
     healthCheckPath: /health
     autoDeploy: true
@@ -18,5 +18,5 @@ services:
         value: "396449039"
       - key: NODE_ENV
         value: production
-      - key: WEBHOOK_MODE
+      - key: DEBUG
         value: "true"
