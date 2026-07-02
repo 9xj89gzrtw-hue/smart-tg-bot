@@ -264,3 +264,34 @@ token = store.get("HF_TOKEN")  # или любой другой
 ### R48 (новое правило):
 Если просишь пользователя — только самые легкие шаги со ссылками.
 Если можешь сделать сама через API — ДЕЛАЙ.
+
+
+## 📊 ФИНАЛ (2026-07-02 end of session)
+
+### РАБОЧИЙ BOT:
+- **Render v950-bot v10.3**: webhook mode + z-ai SDK web search + mega cascade
+- URL: https://v950-bot.onrender.com
+- Webhook: https://v950-bot.onrender.com/webhook
+- Web search: z-ai SDK (PRIMARY) → Wikipedia (fallback)
+- AI: GPT-4o-mini+GH (last verified)
+- Conversation history: 20 messages
+- Bot profile: "Super-Z 🤖" with description + commands
+
+### ОТКЛЮЧЕНО:
+- smart-tg-bot GH Actions: DISABLED (free runner queued 40+ min, не запускается)
+- Render polling mode: DISABLED (409 conflicts)
+- HF Space: secondary (not polling)
+
+### ЧТО ПРОВЕРЕНО END-TO-END:
+1. POST /webhook → 200 OK
+2. Bot processes message → GPT-4o-mini+GH
+3. Web search works (z-ai SDK)
+4. Bot replies to Telegram
+5. /debug shows last_processed + provider
+6. Bot profile updated (name, description, commands)
+
+### CODESPACE:
+- URL: https://super-z-autonomous-xrwp9j95w6wxcvq57.github.dev
+- Status: Available (4 cores, 16GB RAM)
+- ПОКА НЕ НУЖЕН — бот работает на Render
+- Когда понадобится: открыть в браузере, там terminal
