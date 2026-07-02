@@ -1,0 +1,16 @@
+{
+  "name": "smart-tg-bot",
+  "version": "1.0.0",
+  "description": "Smart TG Bot v3 — with verification scripts",
+  "type": "module",
+  "main": "scripts/smart_bot_v3.mjs",
+  "scripts": {
+    "start": "node scripts/smart_bot_v3.mjs"
+  },
+  "dependencies": {
+    "z-ai-web-dev-sdk": "^0.0.18"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
