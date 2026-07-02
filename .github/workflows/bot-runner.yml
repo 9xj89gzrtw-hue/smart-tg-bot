@@ -14,31 +14,13 @@ jobs:
       ALLOWED_CHATS: ${{ secrets.ALLOWED_CHATS }}
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       GH_TOKENS: ${{ secrets.GH_TOKENS }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GOOGLE_AI_KEY: ${{ secrets.GOOGLE_AI_KEY }}
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Start Smart Bot (GH Actions version, no z-ai SDK)
-        run: |
-          echo "🚀 Starting bot (GH Actions mode)..."
-          timeout 300m node scripts/gh_actions_bot.mjs || true
-          echo "Bot stopped, will restart on next cron"
-      
-      - name: Commit updated files (if changed)
-        if: always()
-        run: |
-          git config user.name "Smart Bot"
-          git config user.email "bot@smart-tg-bot"
-          git add -A 2>/dev/null || true
-          if ! git diff --staged --quiet; then
-            git commit -m "🤖 Auto-update from GH Actions run $(date -u +'%Y-%m-%d %H:%M')" || true
-            git push || true
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Start Bot v4 (mega cascade)
+        run: timeout 300m node scripts/gh_actions_bot_v4.mjs || true
