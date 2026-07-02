@@ -30,7 +30,7 @@ const CRITICAL_RULES = `🚨 КРИТИЧНО:
 2. Текущий год: ${new Date().getFullYear()}.
 3. НИКОГДА не говори "X не существует" без web search.
 4. Пользователь: Europe/Berlin, русский, женский род.
-5. Отвечай ПРЯМО. Первая строка = ответ. Без рассуждений вслух.
+5. Отвечай ПРЯМО. Первая строка = ответ. Без рассуждений вслух.\n6. Интерпретируй намерение пользователя, не отвечай буквально.\n7. Если есть [WEB SEARCH] — используй как источник правды.
 6. Не увиливай.`;
 
 // ====================== HUGGINGFACE ROUTER (PRIMARY) ======================
@@ -101,6 +101,25 @@ async function pollinationsChat(messages, maxTokens = 1500) {
     await new Promise(r => setTimeout(r, 1500));
   }
   throw new Error('Pollinations failed');
+}
+
+
+// Web search (DuckDuckGo Instant API — free, no key)
+async function webSearch(query) {
+  try {
+    const r = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query.slice(0, 200))}&format=json&no_html=1`, { signal: AbortSignal.timeout(8000) });
+    const d = await r.json();
+    let result = '';
+    if (d.Abstract) result += d.Abstract.slice(0, 400);
+    for (const t of (d.RelatedTopics || []).slice(0, 3)) if (t.Text) result += '\n' + t.Text.slice(0, 200);
+    return result || null;
+  } catch { return null; }
+}
+
+// Check if question needs web search
+function needsWebSearch(text) {
+  const q = text.toLowerCase();
+  return ['последн','latest','newest','сегодн','today','версия','version','цена','price','новост','news','кто лучше','сравни','2025','2026','2027','сколько стоит'].some(t => q.includes(t));
 }
 
 // MEGA CASCADE
@@ -189,8 +208,13 @@ async function handleUpdate(upd) {
     let liveData = null;
     try { liveData = await fetchLiveData(text); } catch {}
     
+    let webContext = '';
+    if (!liveData && needsWebSearch(text)) {
+      const ws = await webSearch(text);
+      if (ws) webContext = `\n\n[WEB SEARCH: ${ws}]`;
+    }
     const messages = [
-      { role: 'user', content: liveData ? `${text}\n\n[DATA: ${liveData}]` : text },
+      { role: 'user', content: (liveData ? `${text}\n\n[DATA: ${liveData}]` : text) + webContext },
     ];
     
     const { content, provider } = await aiCall(messages, { maxTokens: 2000 });
