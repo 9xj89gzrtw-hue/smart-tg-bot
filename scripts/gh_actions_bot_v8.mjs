@@ -126,14 +126,14 @@ function needsWebSearch(text) {
 async function aiCall(messages, options = {}) {
   const maxTokens = options.maxTokens || 2000;
   
-  // 1. HF Router — DeepSeek-V4-Flash (PRIMARY: latest, fast, MIT, minimal restrictions)
-  try { return { content: await hfRouterChat(messages, 'deepseek-ai/DeepSeek-V4-Flash', maxTokens), provider: 'DeepSeek-V4-Flash+HF' }; } catch (e) { console.log('  HF V4:', e.message.slice(0, 50)); }
-  
-  // 2. HF Router — Qwen3.5-9B (Apache 2.0, fast)
+  // 1. HF Router — Llama-3.3-70B (PRIMARY: most direct answers, smart)
   try { return { content: await hfRouterChat(messages, 'Qwen/Qwen3.5-9B', maxTokens), provider: 'Qwen3.5-9B+HF' }; } catch (e) { console.log('  HF Qwen:', e.message.slice(0, 50)); }
   
-  // 3. HF Router — Llama-3.3-70B (smart, but slower)
-  try { return { content: await hfRouterChat(messages, 'meta-llama/Llama-3.3-70B-Instruct', maxTokens), provider: 'Llama-3.3-70B+HF' }; } catch (e) { console.log('  HF Llama:', e.message.slice(0, 50)); }
+  // 2. HF Router — DeepSeek-V4-Flash (MIT, fast)
+  try { return { content: await hfRouterChat(messages, 'deepseek-ai/DeepSeek-V4-Flash', maxTokens), provider: 'DeepSeek-V4-Flash+HF' }; } catch (e) { console.log('  HF V4:', e.message.slice(0, 50)); }
+  
+  // 3. HF Router — Qwen3.5-9B (Apache 2.0, fast)
+  try { return { content: await hfRouterChat(messages, 'Qwen/Qwen3.5-9B', maxTokens), provider: 'Qwen3.5-9B+HF' }; } catch (e) { console.log('  HF Qwen:', e.message.slice(0, 50)); }
   
   // 4. OpenRouter — Nemotron reasoning (free)
   try { return { content: await openrouterChat(messages, maxTokens), provider: 'Nemotron+OR' }; } catch (e) { console.log('  OR:', e.message.slice(0, 50)); }
