@@ -1,25 +1,22 @@
 # Smart Bot — Render Blueprint
-# Auto-deploys from GitHub repo when connected to Render
-# Free tier: 750 hours/month, sleeps after 15min idle, but webhook wakes it
 services:
   - type: web
     name: smart-tg-bot
     runtime: node
     plan: free
-    region: frankfurt  # EU (close to user in Berlin)
+    region: frankfurt
     branch: main
     rootDir: .
-    buildCommand: npm install -g z-ai-web-dev-sdk@0.0.18
+    buildCommand: npm install
     startCommand: node scripts/smart_bot_v3.mjs
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: TG_TOKEN
-        sync: false  # Set manually in Render dashboard
+        sync: false
       - key: ALLOWED_CHATS
         value: "396449039"
       - key: NODE_ENV
         value: production
       - key: WEBHOOK_MODE
         value: "true"
-    # Render auto-deploys on git push
