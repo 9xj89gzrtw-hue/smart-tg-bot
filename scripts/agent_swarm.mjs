@@ -24,7 +24,7 @@ import fs from 'node:fs';
 
 // Load .env file
 try {
-  const envContent = fs.readFileSync('/home/z/my-project/.env', 'utf8');
+  const envContent = fs.readFileSync(process.env.ENV_FILE || (process.cwd() + '/.env'), 'utf8');
   for (const line of envContent.split('\n')) {
     const m = line.match(/^([A-Z_]+)=(.*)$/);
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
