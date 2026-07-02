@@ -237,3 +237,30 @@ token = store.get("HF_TOKEN")  # или любой другой
 - Meta: https://v950-bot.onrender.com/meta
 - Codespace: https://super-z-autonomous-xrwp9j95w6wxcvq57.github.dev
 - GitHub: https://github.com/9xj89gzrtw-hue/v950-bot
+
+
+## 📊 ОБНОВЛЕНО (end of session)
+
+### РАБОЧИЙ BOT (финал):
+- **GH Actions bot v8.1** (smart-tg-bot repo): polling Telegram, web search (Wikipedia + DDG), GPT-4o-mini+GH
+  - NO Render (suspended)
+  - NO webhook (polling mode)
+  - Bot-runner.yml: ACTIVE (cron every 4h + self-trigger)
+  - Code: scripts/minimal_bot.mjs v8.1
+  - Web search: triggered for versions/prices/dates/news
+  - Footer: shows provider + "web: yes/no"
+
+### ЧТО НУЖНО ЗНАТЬ:
+- GH Actions free runner: QUEUED → может занять 5-15 мин для старта
+- После старта: бот polls Telegram, отвечает с web search
+- Render v950-bot: SUSPENDED (не нужен, GH Actions primary)
+- HF Space: secondary (backup)
+
+### CODESPACE (для пользователя):
+- URL: https://super-z-autonomous-xrwp9j95w6wxcvq57.github.dev
+- ОТКРОЙ В БРАУЗЕРЕ → там terminal с 16GB RAM
+- Что делать: ничего пока не надо, просто держи открытым если понадобится
+
+### R48 (новое правило):
+Если просишь пользователя — только самые легкие шаги со ссылками.
+Если можешь сделать сама через API — ДЕЛАЙ.
