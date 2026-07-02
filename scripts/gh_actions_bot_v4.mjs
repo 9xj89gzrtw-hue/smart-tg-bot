@@ -174,6 +174,45 @@ async function fetchLiveData(q) {
   return null;
 }
 
+// ====================== WEB SEARCH (free, no key) ======================
+async function webSearch(query, num = 3) {
+  const results = [];
+  
+  // 1. DuckDuckGo Instant API
+  try {
+    const r = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query.slice(0, 200))}&format=json&no_html=1`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.Abstract) results.push(`DDG: ${d.Abstract.slice(0, 300)}`);
+      for (const t of (d.RelatedTopics || []).slice(0, 2)) {
+        if (t.Text) results.push(`DDG: ${t.Text.slice(0, 200)}`);
+      }
+    }
+  } catch {}
+  
+  // 2. Wikipedia
+  try {
+    const r = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query.slice(0, 100))}&limit=1&format=json&origin=*`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d && d[1] && d[1][0]) {
+        const r2 = await fetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(d[1][0])}&format=json&origin=*`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        const d2 = await r2.json();
+        const page = Object.values(d2.query.pages)[0];
+        if (page.extract) results.push(`Wiki: ${page.extract.slice(0, 300)}`);
+      }
+    }
+  } catch {}
+  
+  return results.length > 0 ? results.join("\n") : null;
+}
+
 // ====================== TELEGRAM ======================
 async function tg(method, payload) {
   try {
