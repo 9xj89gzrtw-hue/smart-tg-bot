@@ -2,19 +2,14 @@ name: Smart Bot 24/7 Runner
 
 on:
   schedule:
-    # Overlapping schedules — no gap between runs
-    - cron: '0 */4 * * *'    # every 4h
-    - cron: '30 */4 * * *'   # offset 30min for overlap
+    - cron: '0 */4 * * *'
+    - cron: '30 */4 * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Smart Bot 24/7 Runner"]
-    types: [completed]
-    branches: [main]
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 290  # 4h50m — leaves 10min buffer before next cron
+    timeout-minutes: 290
     env:
       TG_TOKEN: ${{ secrets.TG_TOKEN }}
       ALLOWED_CHATS: ${{ secrets.ALLOWED_CHATS }}
@@ -29,31 +24,29 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       
-      - name: Check if another run is already active
+      - name: Check if another run is active
         id: check
         run: |
-          # Get active runs count
           ACTIVE=$(curl -s -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
             "https://api.github.com/repos/9xj89gzrtw-hue/smart-tg-bot/actions/workflows/bot-runner.yml/runs?status=in_progress&per_page=5" \
             | jq '.total_count')
           echo "Active runs: $ACTIVE"
           if [ "$ACTIVE" -gt 1 ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Another run is active, skipping this one"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
       
-      - name: Start Bot v4 (mega cascade)
+      - name: Start Bot v4
         if: steps.check.outputs.skip != 'true'
         run: timeout 280m node scripts/gh_actions_bot_v4.mjs || true
       
-      - name: Trigger next run immediately
+      - name: Trigger next run
         if: always() && steps.check.outputs.skip != 'true'
         run: |
+          sleep 5
           curl -s -X POST \
             "https://api.github.com/repos/9xj89gzrtw-hue/smart-tg-bot/actions/workflows/bot-runner.yml/dispatches" \
             -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d '{"ref":"main"}'
-          echo "Next run triggered"
+            -d '{"ref":"main"}' || true
