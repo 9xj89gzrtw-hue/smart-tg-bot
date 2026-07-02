@@ -18,6 +18,9 @@
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
+// RAG — TF-IDF search over memory files
+import { buildIndex, getContext } from './rag_tfidf.mjs';
+
 const TG_TOKEN = process.env.TG_TOKEN;
 const ALLOWED_CHATS = new Set((process.env.ALLOWED_CHATS || '').split(',').filter(Boolean));
 const HF_TOKEN = process.env.HF_TOKEN || '';
@@ -213,8 +216,16 @@ async function handleUpdate(upd) {
       const ws = await webSearch(text);
       if (ws) webContext = `\n\n[WEB SEARCH: ${ws}]`;
     }
+    // RAG: find relevant memory context
+    let ragContext = '';
+    try {
+      buildIndex();
+      const ctx = getContext(text, 800);
+      if (ctx) ragContext = '\n\n[MEMORY CONTEXT:\n' + ctx + ']';
+    } catch (e) { console.log('RAG err:', e.message); }
+    
     const messages = [
-      { role: 'user', content: (liveData ? `${text}\n\n[DATA: ${liveData}]` : text) + webContext },
+      { role: 'user', content: (liveData ? `${text}\n\n[DATA: ${liveData}]` : text) + webContext + ragContext },
     ];
     
     const { content, provider } = await aiCall(messages, { maxTokens: 2000 });
